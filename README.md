@@ -14,6 +14,7 @@ npm start               # okno + ikona v menu baru
 - `npm run install-app` – sestaví `AI Office.app` (ad-hoc podpis) a nainstaluje do `~/Applications`
 - `npm run dist` – jen sestaví aplikaci do `dist/`
 - `npm run demo` – přehraje ukázkový scénář do běžící aplikace (bez reálného agenta)
+- `npm run backfill` – náhled, co se načte z historie konverzací (jen čte, nic nezapisuje)
 - `npm run uninstall-hooks` – odebere hooky (ostatní hooky zůstanou)
 - Ikona v menu baru: klik = mini kancelář, pravý klik = menu (vždy navrchu, spouštět po přihlášení, demo, konec)
 - Zavřením okna aplikace nekončí, běží dál v menu baru.
@@ -51,6 +52,12 @@ s časem resetu ve spodní liště. Data přichází jen u předplatného Pro/Ma
   povýšení. Klik na notifikaci přepne do terminálu. Vypínají se v menu ikony.
 - **Zaměstnanci a kariéra**: každá session dostane náhodné jméno a vzhled. Kariéru má projekt (XP: +1 za nástroj,
   +10 za úkol; Junior → Medior → Senior → Lead → Ředitel) – s úrovní přibývají brýle, kravata, sluchátka a oblek.
+  Worktrees (`.claude/worktrees/…`, `.worktrees/…`) patří k projektu repozitáře, chaty bez projektu mají jeden společný.
+- **Historie** (jako ccusage): při prvním startu se jednorázově načtou minulé konverzace z `~/.claude/projects`
+  a doplní projektům kariéru (XP), úkoly, odpracovaný čas a výplatu (cena tokenů podle ceníku API) za všechno, co se
+  stalo před začátkem živého sledování. Úkol = dokončená odpověď (Stop), nástroje včetně subagentů, obnovené sessions
+  se nepočítají dvakrát, běhy v `/tmp` se přeskočí. Vše lokálně; před zápisem vznikne `office-data.json.bak-before-history`.
+  Náhled: `npm run backfill`. Vypnout: `AI_OFFICE_NO_HISTORY=1`.
 - **Statistiky** (klik na tabuli nebo portrét, nebo menu ikony): úkoly, odpracovaný čas, výplata a nástroje za dnešek
   a 7 dní po projektech. Na zdi visí portrét **projektu týdne**. Data jsou v `~/Library/Application Support/ai-office/office-data.json`.
 - **Plan mód** → porada u tabule s diagramem.
@@ -102,6 +109,7 @@ src/                    hlavní proces (CommonJS)
   main.js               okna, tray, HTTP server, sessions, notifikace
   hook-events.js        převod payloadů hooků na události kanceláře (čistá logika, testovaná)
   store.js              kariéra projektů (XP), náhodná jména, denní statistiky (office-data.json)
+  history.js            jednorázový import historie z ~/.claude/projects (ceník, dedup, testovaný)
   focus.js              přepnutí do terminálu podle TTY
 renderer/src/           renderer (ES moduly, bez buildu)
   main.js               vstupní bod – IPC, obnova stavu, smyčka

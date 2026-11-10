@@ -4,6 +4,13 @@ const { VALID_TTY } = require('./focus');
 
 const oneLine = (s, n = 80) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n);
 const basename = (p) => (p ? String(p).split('/').filter(Boolean).pop() ?? '' : '');
+/**
+ * One employee per project: a worktree belongs to its repository (/repo/.claude/worktrees/x/sub → /repo)
+ * and all project-less Claude desktop chats share one desk (…/Claude/scratch-workspaces/<id>/… → …/scratch-workspaces).
+ */
+const projectRoot = (cwd) => String(cwd ?? '')
+  .replace(/\/\.(?:claude\/)?worktrees\/[^/]+(?:\/.*)?$/, '')
+  .replace(/(\/scratch-workspaces)\/.*$/, '$1');
 
 function describeTool(tool, input) {
   switch (tool) {
@@ -88,9 +95,9 @@ function normalize(raw) {
 }
 
 function sessionKey(ev) {
-  // Claude: one employee per project folder. Other AIs: one employee per tool. Demo: never persisted.
+  // Claude: one employee per project folder (worktrees included). Other AIs: one employee per tool. Demo: never persisted.
   if (ev.sessionId.startsWith('demo-')) return `demo:${ev.cwd || ev.sessionId}`;
-  return ev.source === 'Claude' ? (ev.cwd || ev.sessionId) : `ai:${ev.source}`;
+  return ev.source === 'Claude' ? (projectRoot(ev.cwd) || ev.sessionId) : `ai:${ev.source}`;
 }
 
-module.exports = { oneLine, basename, describeTool, toolCategory, celebrationFor, normalize, sessionKey };
+module.exports = { oneLine, basename, projectRoot, describeTool, toolCategory, celebrationFor, normalize, sessionKey };

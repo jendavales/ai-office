@@ -13,7 +13,8 @@ const { execFile } = require('node:child_process');
 const { demoScript } = require('./demo');
 const { Store, pickName } = require('./store');
 const { focusTty } = require('./focus');
-const { basename, normalize, sessionKey, toolCategory } = require('./hook-events');
+const { scanHistory } = require('./history');
+const { basename, normalize, projectRoot, sessionKey, toolCategory } = require('./hook-events');
 
 const PORT = Number(process.env.AI_OFFICE_PORT) || 4747;
 const STALE_MS = 3 * 60 * 60 * 1000; // session without any event for 3 h → goes home
@@ -63,7 +64,7 @@ function applyToSession(ev) {
   let s = sessions.get(ev.sessionId);
   if (!s) {
     const key = sessionKey(ev);
-    const project = basename(ev.cwd) || ev.source;
+    const project = basename(projectRoot(ev.cwd)) || ev.source;
     store.profile(key, project);
     const name = pickName(new Set([...sessions.values()].map((x) => x.name)));
     s = {
@@ -325,6 +326,24 @@ function sweepStale() {
   }
 }
 
+// ---------------------------------------------------------------- history
+
+/** One-time import of past Claude Code conversations (everything before live tracking began). */
+async function importHistoryOnce() {
+  if (store.data.history || process.env.AI_OFFICE_SCREENSHOT || process.env.AI_OFFICE_NO_HISTORY) return;
+  const started = Date.now();
+  try {
+    const history = await scanHistory({ until: store.liveSince() });
+    store.importHistory(history);
+    const rows = Object.values(history.projects);
+    const sum = (field) => rows.reduce((acc, p) => acc + p[field], 0);
+    console.log(`[ai-office] history: ${history.sessions} sessions, ${rows.length} projects, ${sum('done')} tasks, ${sum('xp')} XP in ${Date.now() - started} ms`);
+    notify('📚 Historie načtena', `${rows.length} projektů · ${sum('done')} hotových úkolů · ${sum('xp')} XP`, '');
+  } catch (err) {
+    console.error(`[ai-office] history: ${err.message}`);
+  }
+}
+
 // ---------------------------------------------------------------- demo
 
 function runDemo() {
@@ -484,6 +503,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('office:stats', () => store.stats());
     app.on('before-quit', () => store.flush());
     loadPrefs();
+    importHistoryOnce(); // takes its cutoff now, before live events can create new profiles
 
     startServer();
     createMainWindow();

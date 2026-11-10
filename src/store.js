@@ -47,11 +47,11 @@ const dayKey = (date = new Date()) => date.toLocaleDateString('sv-SE'); // YYYY-
 class Store {
   constructor(dir) {
     this.file = path.join(dir, 'office-data.json');
-    this.data = { profiles: {}, days: {} };
+    this.data = { profiles: {}, days: {}, history: null };
     this.timer = null;
     try {
       const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      this.data = { profiles: saved.profiles ?? {}, days: saved.days ?? {} };
+      this.data = { profiles: saved.profiles ?? {}, days: saved.days ?? {}, history: saved.history ?? null };
     } catch { /* first run */ }
     this.prune();
   }
@@ -67,7 +67,7 @@ class Store {
     const real = (obj) => Object.fromEntries(Object.entries(obj).filter(([k]) => !isDemo(k)));
     const days = Object.fromEntries(Object.entries(this.data.days).map(([d, perKey]) => [d, real(perKey)]));
     try {
-      fs.writeFileSync(this.file, JSON.stringify({ profiles: real(this.data.profiles), days }));
+      fs.writeFileSync(this.file, JSON.stringify({ profiles: real(this.data.profiles), days, history: this.data.history }));
     } catch (err) {
       console.error(`[ai-office] store: ${err.message}`);
     }
@@ -141,6 +141,50 @@ class Store {
     this.save();
   }
 
+  /** When live tracking of Claude sessions began – everything before that can only come from history. */
+  liveSince() {
+    const since = Object.entries(this.data.profiles)
+      .filter(([key]) => !isDemo(key) && !key.startsWith('ai:'))
+      .map(([, p]) => p.since);
+    return since.length ? Math.min(...since) : Date.now();
+  }
+
+  /**
+   * Adds what scanHistory() found in past conversations to the projects' careers and daily stats
+   * (once; the result is remembered in data.history).
+   */
+  importHistory(history) {
+    if (fs.existsSync(this.file)) {
+      try {
+        fs.copyFileSync(this.file, `${this.file}.bak-before-history`);
+      } catch (err) {
+        console.error(`[ai-office] store backup: ${err.message}`);
+      }
+    }
+    const keys = Object.keys(history.projects).sort((a, b) => history.projects[a].since - history.projects[b].since);
+    for (const key of keys) {
+      const src = history.projects[key];
+      const existed = Boolean(this.data.profiles[key]);
+      const p = this.profile(key, src.label);
+      p.since = existed ? Math.min(p.since, src.since) : src.since;
+      p.xp += src.xp;
+      p.done += src.done;
+    }
+    for (const [day, perKey] of Object.entries(history.days)) {
+      for (const [key, s] of Object.entries(perKey)) {
+        this.data.days[day] ??= {};
+        const t = (this.data.days[day][key] ??= { done: 0, tools: {}, workMs: 0, cost: 0 });
+        t.done += s.done;
+        t.workMs += s.workMs;
+        t.cost += s.cost;
+        for (const [cat, n] of Object.entries(s.tools)) t.tools[cat] = (t.tools[cat] ?? 0) + n;
+      }
+    }
+    this.data.history = { importedAt: Date.now(), until: history.until, sessions: history.sessions, projects: keys.length };
+    this.prune();
+    this.flush();
+  }
+
   /** Aggregates for the stats panel (rows per project): today, last 7 days, project of the week. */
   stats() {
     const today = dayKey();
@@ -171,4 +215,4 @@ class Store {
   }
 }
 
-module.exports = { Store, LEVELS, NAMES, pickName };
+module.exports = { Store, LEVELS, NAMES, pickName, XP_DONE, XP_TOOL, dayKey };
