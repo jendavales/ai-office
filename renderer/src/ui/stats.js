@@ -1,4 +1,4 @@
-/** Statistics panel (today / last 7 days, per project) and project of the week. */
+/** Statistics panel (today / last 7 days / all projects ever, per project) and project of the week. */
 import { TOOL_CZ } from '../content/texts.js';
 import { state } from '../state.js';
 import { tooltip } from './tooltip.js';
@@ -58,7 +58,7 @@ export function renderStats() {
   panel.append(head);
 
   const tabs = el('div', 'tabs');
-  for (const [key, label] of [['today', 'Dnes'], ['week', 'Posledních 7 dní']]) {
+  for (const [key, label] of [['today', 'Dnes'], ['week', 'Posledních 7 dní'], ['total', 'Celkem']]) {
     const b = el('button', key === statsTab ? 'active' : '', label);
     b.addEventListener('click', () => {
       statsTab = key;
@@ -87,6 +87,7 @@ export function renderStats() {
     for (const r of rows) {
       total = { done: total.done + r.done, workMs: total.workMs + r.workMs, cost: total.cost + r.cost };
       const tr = el('tr');
+      if (r.since) tr.title = `poprvé v kanceláři ${new Date(r.since).toLocaleDateString('cs-CZ')}`;
       const proj = el('td');
       proj.append(el('b', null, r.label ?? '?'));
       const who = el('td');
@@ -112,6 +113,7 @@ export function renderStats() {
     table.append(sum);
     panel.append(table);
   }
+  if (statsTab === 'total') panel.append(el('p', 'hint', 'Všechny projekty za celou dobu, včetně historie konverzací. Najetím na řádek uvidíš, odkdy se na nich pracuje.'));
   panel.append(el('p', 'hint', 'XP: +1 za každý nástroj, +10 za hotový úkol · Junior → Medior (150) → Senior (600) → Lead (1500) → Ředitel (4000)'));
   statsEl.replaceChildren(panel);
 }

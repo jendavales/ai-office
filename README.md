@@ -58,8 +58,10 @@ s časem resetu ve spodní liště. Data přichází jen u předplatného Pro/Ma
   stalo před začátkem živého sledování. Úkol = dokončená odpověď (Stop), nástroje včetně subagentů, obnovené sessions
   se nepočítají dvakrát, běhy v `/tmp` se přeskočí. Vše lokálně; před zápisem vznikne `office-data.json.bak-before-history`.
   Náhled: `npm run backfill`. Vypnout: `AI_OFFICE_NO_HISTORY=1`.
-- **Statistiky** (klik na tabuli nebo portrét, nebo menu ikony): úkoly, odpracovaný čas, výplata a nástroje za dnešek
-  a 7 dní po projektech. Na zdi visí portrét **projektu týdne**. Data jsou v `~/Library/Application Support/ai-office/office-data.json`.
+- **Statistiky** (klik na tabuli nebo portrét, nebo menu ikony): úkoly, odpracovaný čas, výplata a nástroje po projektech
+  za dnešek, 7 dní a **Celkem** (všechny projekty za celou dobu, i ty, na kterých zrovna nikdo nepracuje). Na zdi visí
+  portrét **projektu týdne**. Data jsou v `~/Library/Application Support/ai-office/office-data.json`
+  (denní statistiky 60 dní, celkové součty napořád).
 - **Plan mód** → porada u tabule s diagramem.
 - **Chyba nástroje** → zaměstnanec se chytá za hlavu a z monitoru se kouří. **Došly tokeny** (`StopFailure`
   rate_limit nebo 0 % v limitech) → stávka s transparenty až do resetu.
