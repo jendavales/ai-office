@@ -50,17 +50,19 @@ s časem resetu ve spodní liště. Data přichází jen u předplatného Pro/Ma
   jako Warp, PhpStorm a VS Code se jen aktivují). Hook kvůli tomu posílá TTY procesu Claude.
 - **Notifikace macOS** (když okno kanceláře není v popředí): žádost o povolení, hotový úkol delší než 20 s, chyba API,
   povýšení. Klik na notifikaci přepne do terminálu. Vypínají se v menu ikony.
-- **Zaměstnanci a kariéra**: každá session dostane náhodné jméno a vzhled. Kariéru má projekt (XP: +1 za nástroj,
-  +10 za úkol; Junior → Medior → Senior → Lead → Ředitel) – s úrovní přibývají brýle, kravata, sluchátka a oblek.
-  Worktrees (`.claude/worktrees/…`, `.worktrees/…`) patří k projektu repozitáře, chaty bez projektu mají jeden společný.
+- **Zaměstnanci a kariéra**: každý projekt má stálý tým. Session převezme první volný člen týmu a každá další
+  souběžná session přivede dalšího – pořád tytéž lidi se stálým jménem a vzhledem. Každý má vlastní kariéru
+  (XP: +1 za nástroj, +10 za úkol; Junior → Medior → Senior → Lead → Ředitel) – s úrovní přibývají brýle, kravata,
+  sluchátka a oblek. Projekt = git repozitář: jeho podsložky i worktrees (`.claude/worktrees/…`, `.worktrees/…`)
+  patří k němu, chaty bez projektu mají jeden společný.
 - **Historie** (jako ccusage): při prvním startu se jednorázově načtou minulé konverzace z `~/.claude/projects`
-  a doplní projektům kariéru (XP), úkoly, odpracovaný čas a výplatu (cena tokenů podle ceníku API) za všechno, co se
+  a doplní hlavnímu zaměstnanci každého projektu kariéru (XP), úkoly, odpracovaný čas a výplatu (cena tokenů podle ceníku API) za všechno, co se
   stalo před začátkem živého sledování. Úkol = dokončená odpověď (Stop), nástroje včetně subagentů, obnovené sessions
   se nepočítají dvakrát, běhy v `/tmp` se přeskočí. Vše lokálně; před zápisem vznikne `office-data.json.bak-before-history`.
   Náhled: `npm run backfill`. Vypnout: `AI_OFFICE_NO_HISTORY=1`.
-- **Statistiky** (klik na tabuli nebo portrét, nebo menu ikony): úkoly, odpracovaný čas, výplata a nástroje po projektech
-  za dnešek, 7 dní a **Celkem** (všechny projekty za celou dobu, i ty, na kterých zrovna nikdo nepracuje). Na zdi visí
-  portrét **projektu týdne**. Data jsou v `~/Library/Application Support/ai-office/office-data.json`
+- **Statistiky** (klik na tabuli nebo portrét, nebo menu ikony): úkoly, odpracovaný čas, výplata a nástroje po zaměstnancích
+  za dnešek, 7 dní a **Celkem** (všichni za celou dobu, i ti, kdo zrovna v kanceláři nesedí). Na zdi visí portrét
+  **zaměstnance týdne**, ve statistikách je i **projekt týdne** (práce celého týmu). Data jsou v `~/Library/Application Support/ai-office/office-data.json`
   (denní statistiky 60 dní, celkové součty napořád).
 - **Plan mód** → porada u tabule s diagramem.
 - **Chyba nástroje** → zaměstnanec se chytá za hlavu a z monitoru se kouří. **Došly tokeny** (`StopFailure`
@@ -110,7 +112,8 @@ npm run test:smoke   # spustí appku s demem, vynutí stavy (noc, stávka, stati
 src/                    hlavní proces (CommonJS)
   main.js               okna, tray, HTTP server, sessions, notifikace
   hook-events.js        převod payloadů hooků na události kanceláře (čistá logika, testovaná)
-  store.js              kariéra projektů (XP), náhodná jména, denní statistiky (office-data.json)
+  store.js              zaměstnanci (týmy projektů, jména, kariéra), denní statistiky (office-data.json)
+  project.js            projekt podle git repozitáře (podsložky, worktrees, chaty bez projektu)
   history.js            jednorázový import historie z ~/.claude/projects (ceník, dedup, testovaný)
   focus.js              přepnutí do terminálu podle TTY
 renderer/src/           renderer (ES moduly, bez buildu)

@@ -11,7 +11,7 @@ const http = require('node:http');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
 const { demoScript } = require('./demo');
-const { Store, pickName } = require('./store');
+const { Store, freeMember } = require('./store');
 const { focusTty } = require('./focus');
 const { scanHistory } = require('./history');
 const { basename, normalize, projectRoot, sessionKey, toolCategory } = require('./hook-events');
@@ -63,10 +63,11 @@ function applyToSession(ev) {
   }
   let s = sessions.get(ev.sessionId);
   if (!s) {
-    const key = sessionKey(ev);
+    // the project's team: the first member who isn't already working in another session takes it
+    const projectKey = sessionKey(ev);
     const project = basename(projectRoot(ev.cwd)) || ev.source;
-    store.profile(key, project);
-    const name = pickName(new Set([...sessions.values()].map((x) => x.name)));
+    const { key, slot } = freeMember(projectKey, new Set([...sessions.values()].map((x) => x.key)));
+    const { name } = store.profile(key, project, { project: projectKey, slot });
     s = {
       id: ev.sessionId, key, name, source: ev.source, cwd: ev.cwd, project, tty: null, mode: null,
       status: 'idle', tool: '', text: '', subagents: 0, waiting: false, lastTs: ev.ts,
@@ -132,7 +133,7 @@ function ingest(ev) {
   broadcast('office:event', ev);
   if (s && result.promoted != null) {
     broadcast('office:event', { type: 'levelUp', sessionId: s.id, profile: ev.profile, ts: ev.ts });
-    notify(`⭐ Projekt ${s.project} povýšen!`, `Tým je nově ${ev.profile.title}.`, s.id);
+    notify(`⭐ ${s.name} povýšen(a)!`, `${s.project}: nově ${ev.profile.title}`, s.id);
   }
   if (s) notifyFor(ev, s, result.workMs);
   updateTray();
@@ -338,7 +339,7 @@ async function importHistoryOnce() {
     const rows = Object.values(history.projects);
     const sum = (field) => rows.reduce((acc, p) => acc + p[field], 0);
     console.log(`[ai-office] history: ${history.sessions} sessions, ${rows.length} projects, ${sum('done')} tasks, ${sum('xp')} XP in ${Date.now() - started} ms`);
-    notify('📚 Historie načtena', `${rows.length} projektů · ${sum('done')} hotových úkolů · ${sum('xp')} XP`, '');
+    notify('📚 Historie načtena', `${rows.length} zaměstnanců · ${sum('done')} hotových úkolů · ${sum('xp')} XP`, '');
   } catch (err) {
     console.error(`[ai-office] history: ${err.message}`);
   }
@@ -497,6 +498,9 @@ if (!app.requestSingleInstanceLock()) {
   app.whenReady().then(() => {
     store = new Store(app.getPath('userData'));
     if (process.env.AI_OFFICE_SCREENSHOT) store.showDemo = true;
+    // projects saved under a repository subfolder or worktree join their repository
+    const moved = store.rekey((project) => (project.startsWith('/') ? projectRoot(project) : null));
+    if (moved) console.log(`[ai-office] moved ${moved} employee(s) from repository subfolders to their repositories`);
     ipcMain.handle('office:snapshot', () => [...sessions.values()].map((s) => ({ ...s, profile: store.publicProfile(s.key) })));
     ipcMain.handle('office:info', () => ({ port: PORT, sound: prefs.sound, limits }));
     ipcMain.handle('office:focus', (_e, id) => focusSession(String(id)));

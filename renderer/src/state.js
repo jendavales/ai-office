@@ -5,6 +5,7 @@ export const state = {
   soundOn: true,
   limits: null,          // { fiveHour, week, ts } from the status line
   port: 4747,
+  employeeOfWeek: null,  // from the stats module (portrait on the wall)
   projectOfWeek: null,   // from the stats module
   forceHour: null,       // test hook: preview day/night
 };

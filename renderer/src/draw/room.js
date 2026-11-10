@@ -30,12 +30,12 @@ export function drawPortrait(t) {
   R(4, 6, 20, 26, '#c8a24a');
   R(5, 7, 18, 24, '#a8842e');
   R(6, 8, 16, 18, '#29366f');
-  if (state.projectOfWeek) {
+  if (state.employeeOfWeek) {
     ctx.save();
     ctx.beginPath();
     ctx.rect(OX + 6 * S, OY + 8 * S, 16 * S, 18 * S);
     ctx.clip();
-    figure(14, 40, lookFor(state.projectOfWeek.key, state.projectOfWeek.level), { view: 'front', arms: 'down', t }, 1.25);
+    figure(14, 40, lookFor(state.employeeOfWeek.key, state.employeeOfWeek.level), { view: 'front', arms: 'down', t }, 1.25);
     ctx.restore();
   } else {
     text('?', 14, 20, 7, C.metal);

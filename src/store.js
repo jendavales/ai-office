@@ -1,8 +1,9 @@
 'use strict';
 /**
  * Persistent office data (userData/office-data.json):
- *  - profiles: per-project XP and career level (employee names are random per session, see pickName)
- *  - days: per-day statistics per project (tasks, tool usage, working time, cost)
+ *  - profiles: the employees – every project has a team; member 1 is keyed by the project itself,
+ *    further members (parallel sessions) by `project|n`. Each has a lasting name, XP and career level.
+ *  - days: per-day statistics per employee (tasks, tool usage, working time, cost)
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -30,7 +31,7 @@ function levelFor(xp) {
   return i;
 }
 
-/** Random employee name that isn't in `used` (names of employees currently in the office). */
+/** Random employee name that isn't in `used` (names already given to other employees). */
 function pickName(used = new Set(), random = Math.random) {
   const free = NAMES.filter((n) => !used.has(n));
   if (free.length) return free[Math.floor(random() * free.length)];
@@ -41,6 +42,16 @@ function pickName(used = new Set(), random = Math.random) {
 }
 
 const isDemo = (key) => key.startsWith('demo:');
+
+/** Key of the n-th team member of a project (the first one is the project itself, as before teams). */
+const employeeKey = (project, slot = 1) => (slot > 1 ? `${project}|${slot}` : project);
+
+/** The first team member of `project` who isn't busy (busy = keys of sessions running right now). */
+function freeMember(project, busy) {
+  let slot = 1;
+  while (busy.has(employeeKey(project, slot))) slot += 1;
+  return { key: employeeKey(project, slot), slot };
+}
 
 const dayKey = (date = new Date()) => date.toLocaleDateString('sv-SE'); // YYYY-MM-DD, local time
 
@@ -61,8 +72,13 @@ class Store {
       const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
       this.data = { profiles: saved.profiles ?? {}, days: saved.days ?? {}, history: saved.history ?? null };
     } catch { /* first run */ }
-    // profiles from before all-time totals existed start from the days still kept
-    for (const [key, p] of Object.entries(this.data.profiles)) p.total ??= this.sumDays(key);
+    for (const [key, p] of Object.entries(this.data.profiles)) {
+      p.total ??= this.sumDays(key); // saved before all-time totals: start from the days still kept
+      p.project ??= key; // saved before teams: the project's only employee
+      p.slot ??= 1;
+    }
+    // saved while names were per session: everyone gets a lasting name again
+    for (const p of Object.values(this.data.profiles)) p.name ??= pickName(this.names());
     this.prune();
   }
 
@@ -88,18 +104,22 @@ class Store {
     for (const day of Object.keys(this.data.days)) if (day < cutoff) delete this.data.days[day];
   }
 
-  /** Get or create the career profile of a project. */
-  profile(key, label) {
+  names() {
+    return new Set(Object.values(this.data.profiles).map((p) => p.name).filter(Boolean));
+  }
+
+  /** Get or create an employee: `key` from employeeKey(project, slot), `label` = the project's name. */
+  profile(key, label, { project = key, slot = 1 } = {}) {
     let p = this.data.profiles[key];
     if (!p) {
-      p = { label, xp: 0, done: 0, since: Date.now(), total: emptyTotal() };
+      p = { name: pickName(this.names()), label, project, slot, xp: 0, done: 0, since: Date.now(), total: emptyTotal() };
       this.data.profiles[key] = p;
       this.save();
     }
     return p;
   }
 
-  /** All-time working time, cost and tools of a project (days are kept only KEEP_DAYS). */
+  /** All-time working time, cost and tools of an employee (days are kept only KEEP_DAYS). */
   total(key) {
     const p = this.data.profiles[key];
     return p ? (p.total ??= emptyTotal()) : null;
@@ -119,7 +139,7 @@ class Store {
     if (!p) return null;
     const level = levelFor(p.xp);
     return {
-      key, label: p.label, xp: p.xp, done: p.done, level,
+      key, name: p.name, label: p.label, project: p.project ?? key, xp: p.xp, done: p.done, level,
       title: LEVELS[level].title, levelXp: LEVELS[level].xp, nextXp: LEVELS[level + 1]?.xp ?? null,
     };
   }
@@ -176,6 +196,44 @@ class Store {
     this.save();
   }
 
+  /**
+   * Moves employees to the project `mapProject` returns for theirs (e.g. a repository subfolder → the repository).
+   * A team member who already exists there takes over the career and stats; otherwise the employee moves along.
+   * Projects mapped to null or themselves stay.
+   * @returns {number} how many employees were moved
+   */
+  rekey(mapProject) {
+    let moved = 0;
+    for (const [from, src] of Object.entries(this.data.profiles)) {
+      const project = mapProject(src.project ?? from);
+      if (!project || project === (src.project ?? from)) continue;
+      const to = employeeKey(project, src.slot ?? 1);
+      const label = project.split('/').filter(Boolean).pop() ?? project;
+      const dst = this.data.profiles[to];
+      if (!dst) {
+        this.data.profiles[to] = { ...src, label, project };
+      } else {
+        dst.xp += src.xp;
+        dst.done += src.done;
+        dst.since = Math.min(dst.since, src.since);
+        const srcTotal = src.total ?? emptyTotal();
+        addTotal(this.total(to), srcTotal.workMs, srcTotal.cost, srcTotal.tools);
+      }
+      for (const perKey of Object.values(this.data.days)) {
+        const s = perKey[from];
+        if (!s) continue;
+        const t = (perKey[to] ??= { done: 0, tools: {}, workMs: 0, cost: 0 });
+        t.done += s.done;
+        addTotal(t, s.workMs, s.cost, s.tools);
+        delete perKey[from];
+      }
+      delete this.data.profiles[from];
+      moved += 1;
+    }
+    if (moved) this.flush();
+    return moved;
+  }
+
   /** When live tracking of Claude sessions began – everything before that can only come from history. */
   liveSince() {
     const since = Object.entries(this.data.profiles)
@@ -185,8 +243,8 @@ class Store {
   }
 
   /**
-   * Adds what scanHistory() found in past conversations to the projects' careers and daily stats
-   * (once; the result is remembered in data.history).
+   * Adds what scanHistory() found in past conversations to the daily stats and to the career of each
+   * project's first team member (once; the result is remembered in data.history).
    */
   importHistory(history) {
     if (fs.existsSync(this.file)) {
@@ -222,7 +280,7 @@ class Store {
     this.flush();
   }
 
-  /** Aggregates for the stats panel (rows per project): today, last 7 days, all projects ever, project of the week. */
+  /** Aggregates for the stats panel (rows per employee): today, last 7 days, everyone ever, employee and project of the week. */
   stats() {
     const today = dayKey();
     const weekStart = dayKey(new Date(Date.now() - 6 * 86_400_000));
@@ -251,13 +309,22 @@ class Store {
         return { ...this.publicProfile(key), since: this.data.profiles[key].since, workMs: t.workMs, cost: t.cost, tools: t.tools };
       })
       .sort((a, b) => b.done - a.done || b.xp - a.xp);
+    const projects = new Map(); // the whole team's work counts for the project of the week
+    for (const r of week) {
+      const key = r.project ?? r.key;
+      const p = projects.get(key) ?? { key, label: r.label, done: 0, people: 0 };
+      p.done += r.done;
+      p.people += 1;
+      projects.set(key, p);
+    }
     return {
       today: collect((d) => d === today),
       week,
       total,
-      projectOfWeek: top ? { key: top.key, label: top.label, level: top.level, title: top.title, done: top.done } : null,
+      employeeOfWeek: top ? { key: top.key, name: top.name, label: top.label, level: top.level, title: top.title, done: top.done } : null,
+      projectOfWeek: [...projects.values()].sort((a, b) => b.done - a.done).find((p) => p.done > 0) ?? null,
     };
   }
 }
 
-module.exports = { Store, LEVELS, NAMES, pickName, XP_DONE, XP_TOOL, dayKey };
+module.exports = { Store, LEVELS, NAMES, pickName, employeeKey, freeMember, XP_DONE, XP_TOOL, dayKey };

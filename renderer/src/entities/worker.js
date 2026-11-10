@@ -18,8 +18,8 @@ export const GHOST_AFTER = 5 * 60_000;
 export class Worker extends Person {
   constructor(ev) {
     const profile = ev.profile ?? null;
-    // Every session is a random employee: name from main, look from the session id.
-    super(lookFor(ev.sessionId, profile?.level ?? 0));
+    // Employees are lasting members of a project's team: name from main, look from the employee key.
+    super(lookFor(profile?.key ?? ev.sessionId, profile?.level ?? 0));
     this.key = profile?.key ?? ev.sessionId;
     this.name = ev.name ?? null;
     this.profile = profile;
@@ -68,8 +68,10 @@ export class Worker extends Person {
   setProfile(profile) {
     if (!profile) return;
     const oldLevel = this.profile?.level;
+    const oldKey = this.key;
     this.profile = profile;
-    if (oldLevel !== profile.level) this.look = lookFor(this.id, profile.level);
+    this.key = profile.key ?? this.key;
+    if (oldLevel !== profile.level || oldKey !== this.key) this.look = lookFor(this.key, profile.level);
   }
 
   setMode(mode) {

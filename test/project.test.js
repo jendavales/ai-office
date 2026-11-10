@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { projectRoot } = require('../src/project');
+const { Store } = require('../src/store');
 
 /** repo/ (.git dir) with api/src, a linked worktree elsewhere, a submodule and a plain folder. */
 function layout() {
@@ -32,4 +33,32 @@ test('a repository subfolder or worktree belongs to the repository', () => {
   assert.equal(projectRoot(sub), sub); // a submodule is a project of its own
   assert.equal(projectRoot(plain), plain);
   assert.equal(projectRoot(''), '');
+});
+
+test('employees saved under a subfolder move to their repository', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-test-'));
+  const store = new Store(dir);
+  const main = store.profile('/r', 'r');
+  store.recordDone('/r', 1000);
+  store.profile('/r/api', 'api').since = 1;
+  store.recordTool('/r/api', 'editing');
+  store.recordDone('/r/api', 2000);
+  const second = store.profile('/r/api|2', 'api', { project: '/r/api', slot: 2 });
+  const sub = store.profile('/x/sub', 'sub');
+  store.recordDone('/x/sub', 500);
+  store.profile('demo:/r/api', 'demo');
+
+  const moved = store.rekey((project) => ({ '/r/api': '/r', '/x/sub': '/x' })[project] ?? null);
+  assert.equal(moved, 3);
+  assert.deepEqual(Object.keys(store.data.profiles).sort(), ['/r', '/r|2', '/x', 'demo:/r/api']);
+  // the repository's own member takes over the subfolder member's career…
+  const r = store.publicProfile('/r');
+  assert.deepEqual([r.name, r.label, r.done, r.xp], [main.name, 'r', 2, 21]);
+  assert.equal(store.data.profiles['/r'].since, 1);
+  // …while members the repository didn't have yet move over with their name
+  assert.deepEqual([store.publicProfile('/r|2').name, store.publicProfile('/r|2').project], [second.name, '/r']);
+  assert.deepEqual([store.publicProfile('/x').name, store.publicProfile('/x').label], [sub.name, 'x']);
+  const row = new Store(dir).stats().today.find((s) => s.key === '/r');
+  assert.deepEqual([row.done, row.workMs, row.tools], [2, 3000, { editing: 1 }]);
+  assert.deepEqual(new Store(dir).stats().total.find((s) => s.key === '/r').tools, { editing: 1 });
 });

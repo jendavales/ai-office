@@ -4,16 +4,41 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { Store, LEVELS, NAMES, pickName } = require('../src/store');
+const { Store, LEVELS, NAMES, pickName, employeeKey, freeMember } = require('../src/store');
 
 const tmpStore = () => new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-test-')));
 
-test('project profiles carry no employee name', () => {
-  const store = tmpStore();
+test('employees keep their own lasting, unique name', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-test-'));
+  const store = new Store(dir);
   const a = store.profile('/p/eshop', 'eshop');
+  const b = store.profile(employeeKey('/p/eshop', 2), 'eshop', { project: '/p/eshop', slot: 2 });
   assert.equal(store.profile('/p/eshop', 'eshop'), a);
-  assert.equal(a.name, undefined);
-  assert.equal(store.publicProfile('/p/eshop').name, undefined);
+  assert.ok(NAMES.includes(a.name));
+  assert.notEqual(a.name, b.name);
+  assert.deepEqual([b.project, b.slot, store.publicProfile('/p/eshop|2').name], ['/p/eshop', 2, b.name]);
+  store.flush();
+  assert.equal(new Store(dir).publicProfile('/p/eshop').name, a.name);
+});
+
+test('a parallel session gets the next free member of the project team', () => {
+  assert.deepEqual(freeMember('/p/x', new Set()), { key: '/p/x', slot: 1 });
+  assert.deepEqual(freeMember('/p/x', new Set(['/p/x', '/p/y'])), { key: '/p/x|2', slot: 2 });
+  assert.deepEqual(freeMember('/p/x', new Set(['/p/x|2'])), { key: '/p/x', slot: 1 }); // the main one comes back first
+  assert.deepEqual(freeMember('/p/x', new Set(['/p/x', '/p/x|2'])), { key: '/p/x|3', slot: 3 });
+});
+
+test('profiles saved without names or teams get them on load', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-test-'));
+  fs.writeFileSync(path.join(dir, 'office-data.json'), JSON.stringify({
+    profiles: { '/p/a': { name: 'Ruda', label: 'a', xp: 5, done: 0, since: 1 }, '/p/b': { label: 'b', xp: 0, done: 0, since: 2 } },
+    days: {},
+  }));
+  const store = new Store(dir);
+  assert.equal(store.publicProfile('/p/a').name, 'Ruda');
+  const b = store.data.profiles['/p/b'];
+  assert.ok(NAMES.includes(b.name) && b.name !== 'Ruda');
+  assert.deepEqual([b.project, b.slot], ['/p/b', 1]);
 });
 
 test('random names avoid names already in the office', () => {
@@ -36,18 +61,24 @@ test('XP and promotion', () => {
   assert.equal(p.nextXp, LEVELS[2].xp);
 });
 
-test('daily stats and project of the week', () => {
+test('daily stats per employee, employee and project of the week', () => {
   const store = tmpStore();
   store.profile('/p/a', 'a');
+  store.profile('/p/a|2', 'a', { project: '/p/a', slot: 2 });
   store.profile('/p/b', 'b');
   store.recordDone('/p/a', 60_000);
+  store.recordDone('/p/a|2', 1000);
+  store.recordDone('/p/a|2', 1000);
   store.recordDone('/p/b', 30_000);
   store.recordDone('/p/b', 30_000);
   store.recordCost('/p/b', 1.25);
   store.recordTool('/p/b', 'editing');
   const stats = store.stats();
-  assert.equal(stats.today.length, 2);
-  assert.equal(stats.projectOfWeek.key, '/p/b');
+  assert.equal(stats.today.length, 3); // one row per employee, the team of /p/a has two
+  assert.equal(stats.employeeOfWeek.key, '/p/b');
+  assert.equal(stats.employeeOfWeek.name, store.data.profiles['/p/b'].name);
+  // /p/b ties with /p/a|2 on tasks and wins on working time; the project counts its whole team (1 + 2 tasks)
+  assert.deepEqual(stats.projectOfWeek, { key: '/p/a', label: 'a', done: 3, people: 2 });
   const b = stats.today.find((r) => r.key === '/p/b');
   assert.deepEqual([b.done, b.workMs, b.cost, b.tools.editing], [2, 60_000, 1.25, 1]);
 });

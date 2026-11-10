@@ -37,7 +37,7 @@ export function workerInfo(w) {
     : w.waiting ? 'čeká na povolení'
     : w.place === 'board' || w.place === 'toBoard' ? 'porada u tabule (plan mód)'
       : w.idle ? `pauza – ${IDLE_CZ[w.idle.kind]}` : ACTIVITY_CZ[w.activity] ?? w.activity;
-  const xp = p ? `projekt: ${p.title} · ${p.xp} XP${p.nextXp ? ` (další úroveň ${p.nextXp})` : ''} · hotovo celkem ${p.done}` : '';
+  const xp = p ? `${p.title} · ${p.xp} XP${p.nextXp ? ` (další úroveň ${p.nextXp})` : ''} · hotovo celkem ${p.done}` : '';
   return [
     w.name ? `${w.name} – ${w.project}  (${w.source})` : `${w.project}  (${w.source})`,
     xp,
@@ -63,7 +63,7 @@ canvas.addEventListener('mousemove', (e) => {
   if (found.worker) info = workerInfo(found.worker);
   else if (found.intern) info = `stážista (subagent)\n${found.intern.label}\nšéf: ${found.intern.boss.displayName}\n🖱 klik = přepnout do terminálu`;
   else if (found.cat) info = 'Bajt – kancelářská kočka\n🖱 klik = pohladit';
-  else if (found.portrait) info = state.projectOfWeek ? `Projekt týdne: ${state.projectOfWeek.label} (${state.projectOfWeek.title})\n${state.projectOfWeek.done} hotových úkolů za 7 dní\n🖱 klik = statistiky` : 'Projekt týdne – zatím žádný\n🖱 klik = statistiky';
+  else if (found.portrait) info = state.employeeOfWeek ? `Zaměstnanec týdne: ${state.employeeOfWeek.name} (${state.employeeOfWeek.label}, ${state.employeeOfWeek.title})\n${state.employeeOfWeek.done} hotových úkolů za 7 dní\n🖱 klik = statistiky` : 'Zaměstnanec týdne – zatím nikdo\n🖱 klik = statistiky';
   else info = '🖱 klik = statistiky';
   tooltip.textContent = info;
   tooltip.hidden = false;
