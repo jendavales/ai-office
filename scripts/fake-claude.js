@@ -4,10 +4,23 @@
  * Stand-in for `claude -p --input-format stream-json --output-format stream-json` in tests and the smoke run
  * (AI_OFFICE_CLAUDE_BIN=scripts/fake-claude.js): answers every message with a streamed reply and one Read call,
  * honours interrupts, no network, no tokens. Message shapes follow recorded Claude Code 2.1 output.
- * A message containing "slow" keeps working until interrupted.
+ * A message containing "slow" keeps working until interrupted. The model and effort flags are echoed in the reply.
  */
 const args = process.argv.slice(2);
 const id = args[args.indexOf('--session-id') + 1] || args[args.indexOf('--resume') + 1] || 'fake';
+
+// `claude -p --output-format text` with the prompt on stdin: how AI Office asks for a conversation title
+if (args[args.indexOf('--output-format') + 1] === 'text') {
+  let prompt = '';
+  process.stdin.setEncoding('utf8');
+  process.stdin.on('data', (c) => { prompt += c; });
+  process.stdin.on('end', () => {
+    const first = /--- Uživatel ---\n(.*)/.exec(prompt)?.[1] ?? '';
+    process.stdout.write(`"Název: ${first.slice(0, 20).trim()}"\n`);
+    process.exit(0);
+  });
+  return;
+}
 const out = (msg) => process.stdout.write(`${JSON.stringify({ session_id: id, ...msg })}\n`);
 let turn = 0;
 let working = null;
@@ -30,7 +43,9 @@ function answer(text) {
     working = setTimeout(() => finish('success'), 60_000);
     return;
   }
-  const reply = `Hotovo: **${text.slice(0, 40)}**\n\n- bod jedna\n- bod dva`;
+  const model = args.includes('--model') ? args[args.indexOf('--model') + 1] : 'výchozí';
+  const effort = args.includes('--effort') ? args[args.indexOf('--effort') + 1] : 'výchozí';
+  const reply = `Hotovo: **${text.slice(0, 40)}**\n\n- bod jedna\n- bod dva\n- model ${model}, effort ${effort}`;
   out({ type: 'stream_event', parent_tool_use_id: null, event: { type: 'content_block_start', content_block: { type: 'text' } } });
   for (const part of reply.match(/.{1,8}/gs)) out({ type: 'stream_event', parent_tool_use_id: null, event: { type: 'content_block_delta', delta: { type: 'text_delta', text: part } } });
   out({ type: 'assistant', parent_tool_use_id: null, message: { id: `m${turn}b`, content: [{ type: 'text', text: reply }] } });

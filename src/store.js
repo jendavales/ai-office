@@ -4,6 +4,8 @@
  *  - profiles: the employees – every project has a team; member 1 is keyed by the project itself,
  *    further members (parallel sessions) by `project|n`. Each has a lasting name, XP and career level.
  *  - days: per-day statistics per employee (tasks, tool usage, working time, cost)
+ *  - owners: who owns each conversation (session id → { key, slot, project, since, lastSeen }) – coming back
+ *    to it, the owner takes it again unless busy elsewhere; then a colleague covers for them
  */
 const fs = require('node:fs');
 const path = require('node:path');
@@ -24,6 +26,7 @@ const LEVELS = [
 const XP_DONE = 10;
 const XP_TOOL = 1;
 const KEEP_DAYS = 60;
+const KEEP_OWNERS = 3000; // conversations whose owner is remembered (the least recently seen go first)
 
 function levelFor(xp) {
   let i = 0;
@@ -53,6 +56,18 @@ function freeMember(project, busy) {
   return { key: employeeKey(project, slot), slot };
 }
 
+/** Accusative of a first name, for „zastupuje Vencu“: Venca → Vencu, Mirek → Mirka, Karel → Karla, Bohouš → Bohouše. */
+function accusative(name) {
+  const [first, ...rest] = String(name).split(' ');
+  let acc = first;
+  if (/a$/.test(first)) acc = `${first.slice(0, -1)}u`;
+  else if (/ek$/.test(first)) acc = `${first.slice(0, -2)}ka`;
+  else if (/el$/.test(first)) acc = `${first.slice(0, -2)}la`;
+  else if (/[šžčřcjďťň]$/.test(first)) acc = `${first}e`;
+  else if (/[bdfghklmnpqrstvwxz]$/.test(first)) acc = `${first}a`;
+  return [acc, ...rest].join(' ');
+}
+
 const dayKey = (date = new Date()) => date.toLocaleDateString('sv-SE'); // YYYY-MM-DD, local time
 
 const emptyTotal = () => ({ workMs: 0, cost: 0, tools: {} });
@@ -66,11 +81,11 @@ function addTotal(total, workMs, cost, tools) {
 class Store {
   constructor(dir) {
     this.file = path.join(dir, 'office-data.json');
-    this.data = { profiles: {}, days: {}, history: null };
+    this.data = { profiles: {}, days: {}, history: null, owners: {} };
     this.timer = null;
     try {
       const saved = JSON.parse(fs.readFileSync(this.file, 'utf8'));
-      this.data = { profiles: saved.profiles ?? {}, days: saved.days ?? {}, history: saved.history ?? null };
+      this.data = { profiles: saved.profiles ?? {}, days: saved.days ?? {}, history: saved.history ?? null, owners: saved.owners ?? {} };
     } catch { /* first run */ }
     for (const [key, p] of Object.entries(this.data.profiles)) {
       p.total ??= this.sumDays(key); // saved before all-time totals: start from the days still kept
@@ -92,8 +107,9 @@ class Store {
     // demo sessions live only in memory
     const real = (obj) => Object.fromEntries(Object.entries(obj).filter(([k]) => !isDemo(k)));
     const days = Object.fromEntries(Object.entries(this.data.days).map(([d, perKey]) => [d, real(perKey)]));
+    const owners = Object.fromEntries(Object.entries(this.data.owners).filter(([, o]) => !isDemo(o.key)));
     try {
-      fs.writeFileSync(this.file, JSON.stringify({ profiles: real(this.data.profiles), days, history: this.data.history }));
+      fs.writeFileSync(this.file, JSON.stringify({ profiles: real(this.data.profiles), days, history: this.data.history, owners }));
     } catch (err) {
       console.error(`[ai-office] store: ${err.message}`);
     }
@@ -117,6 +133,62 @@ class Store {
       this.save();
     }
     return p;
+  }
+
+  /** An existing employee's name (never creates one): { key, name, whom } – `whom` for „zastupuje Vencu“. */
+  nameTag(key) {
+    const name = key != null ? this.data.profiles[key]?.name : null;
+    return name ? { key, name, whom: accusative(name) } : null;
+  }
+
+  /** The employee who owns a conversation: { key, slot, project, since, lastSeen } or null. */
+  ownerOf(sessionId) {
+    return sessionId != null && Object.hasOwn(this.data.owners, sessionId) ? this.data.owners[sessionId] : null;
+  }
+
+  /** Makes `key` the conversation's owner (the time ownership began stays while the owner does). */
+  setOwner(sessionId, { key, slot = 1, project = key }) {
+    const old = this.data.owners[sessionId];
+    const ts = Date.now();
+    this.data.owners[sessionId] = { key, slot, project, since: old?.key === key ? old.since : ts, lastSeen: ts };
+    this.pruneOwners();
+    this.save();
+    return this.data.owners[sessionId];
+  }
+
+  /** A copy of a conversation (branch, rewind) belongs to the original's owner. @returns the new record or null */
+  inheritOwner(fromId, toId) {
+    const o = this.ownerOf(fromId);
+    return o ? this.setOwner(toId, o) : null;
+  }
+
+  pruneOwners(max = KEEP_OWNERS) {
+    const all = Object.entries(this.data.owners);
+    if (all.length <= max) return;
+    all.sort(([, a], [, b]) => (a.lastSeen ?? 0) - (b.lastSeen ?? 0));
+    for (const [id] of all.slice(0, all.length - max)) delete this.data.owners[id];
+  }
+
+  /**
+   * Who works on a conversation (re)appearing in the office: its owner if not busy (busy = keys of sessions running
+   * right now), else the first free member of the team, who covers for the owner (`substitute`) without taking
+   * the conversation over. A conversation without an owner – or with one from another project – gets the free
+   * member as its owner. No `sessionId` (not a conversation) → just the free member.
+   * @returns {{ key: string, slot: number, owner: { key: string, slot: number } | null, substitute: boolean }}
+   */
+  assignMember(projectKey, sessionId, busy) {
+    const free = () => freeMember(projectKey, busy);
+    if (sessionId == null) return { ...free(), owner: null, substitute: false };
+    const o = this.ownerOf(sessionId);
+    if (o && o.project === projectKey) {
+      o.lastSeen = Date.now();
+      this.save();
+      const owner = { key: o.key, slot: o.slot ?? 1 };
+      return busy.has(o.key) ? { ...free(), owner, substitute: true } : { ...owner, owner, substitute: false };
+    }
+    const m = free();
+    this.setOwner(sessionId, { ...m, project: projectKey });
+    return { ...m, owner: { key: m.key, slot: m.slot }, substitute: false };
   }
 
   /** All-time working time, cost and tools of an employee (days are kept only KEEP_DAYS). */
@@ -227,6 +299,7 @@ class Store {
         addTotal(t, s.workMs, s.cost, s.tools);
         delete perKey[from];
       }
+      for (const o of Object.values(this.data.owners)) if (o.key === from) Object.assign(o, { key: to, project });
       delete this.data.profiles[from];
       moved += 1;
     }
@@ -348,4 +421,4 @@ class Store {
   }
 }
 
-module.exports = { Store, LEVELS, NAMES, pickName, employeeKey, freeMember, XP_DONE, XP_TOOL, dayKey };
+module.exports = { Store, LEVELS, NAMES, pickName, employeeKey, freeMember, accusative, XP_DONE, XP_TOOL, dayKey };

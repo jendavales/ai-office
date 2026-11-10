@@ -22,8 +22,9 @@ export class Person {
     return this.path.length > 0;
   }
 
-  walkTo(loc, onArrive) {
-    this.path = route({ x: this.x, y: this.y }, loc);
+  /** `opts` go to the path finder (see world/path.js findPath), e.g. `{ detour: 0 }` for short indoor walks. */
+  walkTo(loc, onArrive, opts) {
+    this.path = route({ x: this.x, y: this.y }, loc, opts);
     this.onArrive = onArrive ?? null;
   }
 

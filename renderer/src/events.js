@@ -140,7 +140,7 @@ export function restore(sessions) {
   for (const s of sessions) {
     // live events may arrive before the snapshot does – those sessions already exist
     if (workers.has(s.id)) continue;
-    const w = new Worker({ sessionId: s.id, name: s.name, source: s.source, cwd: s.cwd, project: s.project, profile: s.profile, mode: s.mode });
+    const w = new Worker({ sessionId: s.id, name: s.name, source: s.source, cwd: s.cwd, project: s.project, profile: s.profile, mode: s.mode, coverFor: s.coverFor });
     workers.set(w.id, w);
     w.placeAt(w.seat);
     w.place = 'desk';

@@ -5,14 +5,17 @@
  *  - process scanner for other AI CLIs (Codex, Gemini, Aider, …)
  *  - session state, office window, menu-bar tray + popover
  */
-const { app, BrowserWindow, Tray, Menu, Notification, dialog, nativeImage, ipcMain, screen, shell } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, dialog, nativeImage, ipcMain, safeStorage, screen, shell } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
+const os = require('node:os');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
-const { Agents } = require('./agent');
+const { Agents, EFFORTS, MODELS } = require('./agent');
+const { Conversations } = require('./conversations');
 const { demoScript } = require('./demo');
-const { Store, freeMember } = require('./store');
+const { Store } = require('./store');
+const { Todoist } = require('./todoist');
 const { focusTty } = require('./focus');
 const { scanHistory } = require('./history');
 const { basename, normalize, projectRoot, sessionKey, toolCategory } = require('./hook-events');
@@ -38,6 +41,10 @@ let prefs = { sound: true, notify: true };
 let store = null;
 /** @type {Agents} sessions AI Office runs itself (conversation panel) */
 let agents = null;
+/** @type {Conversations} every Claude Code conversation on this machine (desktop, terminals, ours) */
+let conversations = null;
+/** @type {Todoist} the director's to-do list */
+let todoist = null;
 
 function loadPrefs() {
   try {
@@ -66,13 +73,17 @@ function applyToSession(ev) {
   }
   let s = sessions.get(ev.sessionId);
   if (!s) {
-    // the project's team: the first member who isn't already working in another session takes it
+    // the project's team: the conversation's owner, or – while they work in another session – the first free
+    // member, who covers for them (other AIs' processes aren't conversations: just the first free member)
     const projectKey = sessionKey(ev);
     const project = basename(projectRoot(ev.cwd)) || ev.source;
-    const { key, slot } = freeMember(projectKey, new Set([...sessions.values()].map((x) => x.key)));
+    const busy = new Set([...sessions.values()].map((x) => x.key));
+    const conversation = ev.sessionId.startsWith('proc:') ? null : ev.sessionId;
+    const { key, slot, owner, substitute } = store.assignMember(projectKey, conversation, busy);
     const { name } = store.profile(key, project, { project: projectKey, slot });
     s = {
-      id: ev.sessionId, key, name, source: ev.source, cwd: ev.cwd, project, tty: null, mode: null,
+      id: ev.sessionId, key, name, coverFor: substitute ? store.nameTag(owner.key) : null,
+      source: ev.source, cwd: ev.cwd, project, tty: null, mode: null,
       status: 'idle', tool: '', text: '', subagents: 0, waiting: false, lastTs: ev.ts,
       // a session we saw start costs $0 so far; for sessions already running we only count increments
       workStart: null, context: null, cost: ev.type === 'join' ? 0 : null,
@@ -131,6 +142,7 @@ function ingest(ev) {
     ev.project = s.project;
     ev.name = s.name;
     ev.profile = store.publicProfile(s.key);
+    ev.coverFor = s.coverFor; // { key, name, whom } of the owner this one covers for, or null
     if (ev.type === 'done') ev.workMs = result.workMs; // long tasks tire employees out (renderer mood)
   }
   broadcast('office:event', ev);
@@ -385,23 +397,207 @@ function projectFolders() {
   return [...seen.values()].filter((p) => fs.existsSync(p.path)).sort((a, b) => b.last - a.last);
 }
 
+/**
+ * The model a session of ours answers with: its running process's, else the one of its last reply (the index reads
+ * it from the transcript) – unless you picked another one since.
+ */
+function sessionModel(s, indexed) {
+  if (s.running) return s.liveModel;
+  const last = s.liveModel ?? indexed?.lastModel ?? null;
+  return last && (!s.model || last.includes(s.model)) ? last : null;
+}
+
+/** A session of ours as a list entry: the index knows its title and transcript, `agents` its process and settings. */
+function ourSummary(id, indexed = conversations.get(id)) {
+  const s = agents.summary(id);
+  if (!s) return null;
+  return {
+    ...indexed,
+    ...s,
+    liveModel: sessionModel(s, indexed),
+    projectPath: indexed?.projectPath ?? (projectRoot(s.cwd) || s.cwd),
+    title: conversations.titleOf(id) ?? indexed?.title ?? (s.title || 'Bez názvu'),
+    lastActive: Math.max(s.lastActive ?? 0, indexed?.lastActive ?? 0),
+    source: 'office',
+    managed: true,
+    archived: conversations.isArchived(id),
+    owner: store.nameTag(store.ownerOf(id)?.key),
+  };
+}
+
+/** A conversation of another app (Claude desktop, a terminal): nothing runs, nothing is set; the model of its last reply. */
+const foreignSummary = (indexed) => ({
+  ...indexed, managed: false, running: false, busy: false, activity: '', summary: '', mode: null, model: null, effort: null, cost: 0,
+  liveModel: indexed.lastModel ?? null,
+  owner: store.nameTag(store.ownerOf(indexed.id)?.key),
+});
+
+/** Every conversation – the index, sessions of ours merged in (also the ones without a transcript yet) – most recent first. */
+function conversationList() {
+  const out = [];
+  const seen = new Set();
+  for (const c of conversations.list()) {
+    seen.add(c.id);
+    out.push(agents.has(c.id) ? ourSummary(c.id, c) : foreignSummary(c));
+  }
+  for (const s of agents.list()) {
+    if (!seen.has(s.id) && !conversations.isHidden(s.id)) out.push(ourSummary(s.id));
+  }
+  return out.sort((a, b) => b.lastActive - a.lastActive);
+}
+
+let listTimer = null;
+/** Tells the renderer to ask for the list again – at most twice a second (the first index scan fires often). */
+function listChanged() {
+  listTimer ??= setTimeout(() => {
+    listTimer = null;
+    broadcast('chat:list', null);
+  }, 500);
+}
+
+async function openConversation(id) {
+  if (agents.has(id)) {
+    const conv = await agents.open(id);
+    return conv && { ...ourSummary(id), customTitle: conv.customTitle, items: conv.items, seq: conv.seq };
+  }
+  const indexed = conversations.get(id);
+  const file = conversations.fileOf(id);
+  if (!indexed || !file) return null;
+  const conv = await agents.open(id, { file, cwd: indexed.cwd });
+  return conv && { ...conv, ...foreignSummary(indexed), liveModel: conv.liveModel ?? indexed.lastModel ?? null };
+}
+
+/** A copy of a conversation as a session of ours (cut before your message no. `before`), under the original's title. */
+async function forkConversation(id, before = null) {
+  const own = agents.has(id);
+  const indexed = conversations.get(id);
+  const title = conversations.titleOf(id) ?? indexed?.title ?? agents.summary(id)?.title;
+  const newId = await agents.fork({
+    id, before: Number.isInteger(before) && before >= 0 ? before : null, cwd: indexed?.cwd ?? null, file: own ? null : conversations.fileOf(id),
+  });
+  store.inheritOwner(id, newId); // a branch or rewind belongs to the original's owner (also a reply to another app's conversation)
+  // a name you gave the original stays yours: Claude's titles come along in the copied transcript and would beat `auto`
+  if (conversations.titles[id]) conversations.rename(newId, conversations.titles[id]);
+  else if (title) conversations.setAuto(newId, title);
+  listChanged();
+  return newId;
+}
+
+/** Your message; a conversation of another app is continued in a copy of ours (the original stays as it was). */
+async function sendTo(id, text) {
+  if (agents.has(id) || !String(text ?? '').trim()) {
+    await agents.send(id, text);
+    return id;
+  }
+  const newId = await forkConversation(id);
+  await agents.send(newId, text);
+  return newId;
+}
+
+/** Rewind: the copy takes the original's place in the list. */
+async function rewindConversation(id, before) {
+  const newId = await forkConversation(id, before);
+  conversations.hide(id);
+  agents.forget(id);
+  return newId;
+}
+
+const MODEL_LABELS = { fable: 'Fable', opus: 'Opus', sonnet: 'Sonnet', haiku: 'Haiku' };
+const EFFORT_LABELS = { low: 'nízké', medium: 'střední', high: 'vysoké', xhigh: 'velmi vysoké', max: 'maximální' };
+
+/** Model and effort of your Claude Code settings – what a session without its own choice runs with. */
+function claudeDefaults() {
+  try {
+    const s = JSON.parse(fs.readFileSync(path.join(os.homedir(), '.claude', 'settings.json'), 'utf8'));
+    const str = (v) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+    return { model: str(s?.model), effort: str(s?.effortLevel) };
+  } catch {
+    return { model: null, effort: null };
+  }
+}
+
+function chatOptions() {
+  const defaults = claudeDefaults();
+  const fallback = (label) => (label ? `výchozí (${label})` : 'výchozí');
+  return {
+    models: [{ value: '', label: fallback(defaults.model && (MODEL_LABELS[defaults.model] ?? defaults.model)) }, ...MODELS.map((m) => ({ value: m, label: MODEL_LABELS[m] ?? m }))],
+    efforts: [{ value: '', label: fallback(defaults.effort && (EFFORT_LABELS[defaults.effort] ?? defaults.effort)) }, ...EFFORTS.map((e) => ({ value: e, label: EFFORT_LABELS[e] ?? e }))],
+    defaults,
+  };
+}
+
 function setupAgents() {
-  agents = new Agents({ dir: app.getPath('userData'), port: PORT });
+  const dir = app.getPath('userData');
+  agents = new Agents({ dir, port: PORT });
+  conversations = new Conversations({ dir });
+  const running = new Map(); // id → running, to tell the list about new sessions and ones that started or ended
   agents.on('item', (p) => broadcast('chat:item', p));
-  agents.on('state', (s) => broadcast('chat:state', s));
+  agents.on('state', (s) => {
+    broadcast('chat:state', ourSummary(s.id) ?? s);
+    if (running.get(s.id) !== s.running) {
+      running.set(s.id, s.running);
+      listChanged();
+    }
+  });
   agents.on('status', onStatus); // cost and subscription limits, as if from the status line
-  ipcMain.handle('chat:list', () => agents.list());
-  ipcMain.handle('chat:open', (_e, id) => agents.open(String(id)));
-  ipcMain.handle('chat:create', (_e, o) => agents.create({ cwd: o?.cwd, prompt: o?.prompt }));
-  ipcMain.handle('chat:send', (_e, id, text) => agents.send(String(id), text));
+  agents.on('title', ({ id, title }) => conversations.setAuto(id, title));
+  agents.on('turn', ({ id }) => conversations.touch(id).catch(() => {})); // the transcript grew: re-index it
+  conversations.on('update', listChanged);
+  ipcMain.handle('chat:list', () => conversationList());
+  ipcMain.handle('chat:open', (_e, id) => openConversation(String(id)));
+  ipcMain.handle('chat:create', (_e, o) => agents.create({ cwd: o?.cwd, prompt: o?.prompt, model: o?.model, effort: o?.effort }));
+  ipcMain.handle('chat:send', (_e, id, text) => sendTo(String(id), text));
   ipcMain.handle('chat:stop', (_e, id) => agents.stop(String(id)));
   ipcMain.handle('chat:dismiss', (_e, id) => agents.dismiss(String(id)));
+  ipcMain.handle('chat:fork', (_e, id, before) => forkConversation(String(id), before));
+  ipcMain.handle('chat:rewind', (_e, id, before) => rewindConversation(String(id), before));
+  ipcMain.handle('chat:rename', (_e, id, title) => conversations.rename(String(id), String(title ?? '')));
+  ipcMain.handle('chat:archive', (_e, id, on) => conversations.archive(String(id), Boolean(on)));
+  ipcMain.handle('chat:search', (_e, q) => conversations.search(String(q ?? '')));
+  ipcMain.handle('chat:setOptions', (_e, id, o) => (agents.setOptions(String(id), { model: o?.model, effort: o?.effort }) ? ourSummary(String(id)) : null));
+  ipcMain.handle('chat:options', () => chatOptions());
   ipcMain.handle('chat:projects', () => projectFolders());
   ipcMain.handle('chat:pickFolder', async () => {
     const r = await dialog.showOpenDialog(mainWin, { title: 'Složka projektu', properties: ['openDirectory'] });
     return r.canceled ? null : r.filePaths[0] ?? null;
   });
-  app.on('before-quit', () => agents.shutdown());
+  // the first scan of every transcript takes seconds: it starts once the office window is up
+  app.once('browser-window-created', (_e, win) => {
+    let started = false;
+    const start = () => {
+      if (started) return;
+      started = true;
+      conversations.start();
+    };
+    win.webContents.once('did-finish-load', start);
+    setTimeout(start, 5000).unref();
+  });
+  app.on('before-quit', () => {
+    agents.shutdown();
+    conversations.stop();
+  });
+}
+
+// ---------------------------------------------------------------- the director's to-do list (Todoist)
+
+function showTodos() {
+  showMainWindow();
+  mainWin.webContents.send('todoist:show');
+}
+
+function setupTodoist() {
+  todoist = new Todoist({ dir: app.getPath('userData'), safeStorage });
+  todoist.on('update', (snapshot) => broadcast('todoist:update', snapshot));
+  ipcMain.handle('todoist:status', () => todoist.status());
+  ipcMain.handle('todoist:list', (_e, force) => todoist.list(Boolean(force)));
+  ipcMain.handle('todoist:setToken', (_e, token) => todoist.setToken(token));
+  ipcMain.handle('todoist:clearToken', () => todoist.clearToken());
+  ipcMain.handle('todoist:create', (_e, task) => todoist.create(task ?? {}));
+  ipcMain.handle('todoist:close', (_e, id) => todoist.close(String(id)));
+  ipcMain.handle('todoist:setDue', (_e, id, due) => todoist.setDue(String(id), due ? String(due) : null));
+  ipcMain.handle('todoist:open', () => showTodos());
+  todoist.start(); // polling – a no-op without a token (the renderer asks for the list once it is set)
+  app.on('before-quit', () => todoist.stop());
 }
 
 // ---------------------------------------------------------------- windows
@@ -522,6 +718,7 @@ function trayMenu() {
   return Menu.buildFromTemplate([
     { label: 'Otevřít kancelář', click: showMainWindow },
     { label: 'Statistiky…', click: () => { showMainWindow(); mainWin.webContents.send('office:showStats'); } },
+    { label: 'Úkoly ředitele (Todoist)…', click: showTodos },
     {
       label: 'Okno vždy navrchu', type: 'checkbox', checked: Boolean(mainWin?.isAlwaysOnTop()),
       click: (item) => { showMainWindow(); mainWin.setAlwaysOnTop(item.checked, 'floating'); },
@@ -568,6 +765,7 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('office:stats', () => store.stats());
     ipcMain.handle('office:openExternal', (_e, url) => openExternal(url));
     setupAgents();
+    setupTodoist();
     app.on('before-quit', () => store.flush());
     loadPrefs();
     importHistoryOnce(); // takes its cutoff now, before live events can create new profiles

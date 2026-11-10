@@ -1,4 +1,4 @@
-/** Drawing employees and interns according to their state. */
+/** Drawing employees, interns and the director according to their state. */
 import { now } from '../core/util.js';
 import { chairBack, figure as drawFigure, ghostFigure } from './figure.js';
 import { EMOTIONS, moodSpeed } from '../entities/mood.js';
@@ -82,4 +82,22 @@ export function drawIntern(i, t) {
     return;
   }
   drawFigure(i.x, i.y, i.look, { view: 'front', arms: 'laptop', animate: true, t: t + i.slot }, 0.8);
+}
+
+
+/**
+ * The director walks about the glass office: strolls and looks around (facing the room), paces on the phone,
+ * rummages in the filing cabinet or writes on the task board (at a spot: seen from behind, hands busy).
+ */
+export function drawDirector(d, t) {
+  const beat = d.beat;
+  if (d.walking) {
+    drawFigure(d.x, d.y, d.look, { view: d.facing === 'up' ? 'back' : 'front', walking: d.step, arms: beat?.kind === 'phone' ? 'phone' : 'down', face: d.face, t });
+    return;
+  }
+  if (beat?.spot) {
+    drawFigure(d.x, d.y, d.look, { view: 'back', arms: beat.arms, animate: true, t });
+    return;
+  }
+  drawFigure(d.x, d.y, d.look, { view: 'front', arms: beat?.arms ?? 'down', face: d.face, t });
 }

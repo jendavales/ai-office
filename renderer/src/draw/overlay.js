@@ -3,8 +3,10 @@ import { H, OX, OY, R, S, W, ctx, measure, text, truncate } from '../core/canvas
 import { C } from '../core/palette.js';
 import { clamp } from '../core/util.js';
 import { WORKING } from '../entities/activity.js';
+import { director } from '../entities/director.js';
 import { strikeActive } from '../limits.js';
 import { state, workers } from '../state.js';
+import { TASK_BOARD } from '../world/layout.js';
 import { EMOTIONS, showEmote } from '../entities/mood.js';
 
 export const BUBBLE_STYLE = {
@@ -45,7 +47,21 @@ export function nameTag(x, y, label, color, selected = false) {
 }
 
 
+/**
+ * The director: name tag above the head (at the feet it would sit under the bubbles of the desks below
+ * the office), highlighted while the to-do panel is open; bubble above the tag. Standing at a spot with
+ * the back to the room, the tag drops to the feet, and at the task board the bubble goes above the board,
+ * so neither covers the notes. The amount of tasks is on the task board (draw/taskboard.js).
+ */
+function drawDirectorOverlay() {
+  const spot = director.walking ? null : director.beat?.spot;
+  nameTag(director.x, spot ? director.y + 2.5 : director.y - 27, director.name, C.yellow, state.todosOpen);
+  if (director.bubble) bubble(director.x, spot === 'board' ? TASK_BOARD.y - 2 : director.y - 29, director.bubble.text, director.bubble.kind);
+}
+
+
 export function drawOverlay(t) {
+  drawDirectorOverlay();
   const list = [...workers.values()].filter((w) => !w.gone);
   // waiting bubbles last so they stay on top
   list.sort((a, b) => Number(a.waiting) - Number(b.waiting));

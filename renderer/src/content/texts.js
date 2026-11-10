@@ -31,6 +31,16 @@ export const MOOD_LINES = {
 };
 
 
+/** The director (you) and the to-do list. */
+export const DIRECTOR_LINES = {
+  overdue: ['Tohle už mělo být hotové…', 'Termíny hoří 🔥', 'To nestíháme!'],
+  today: ['Dneska toho je dost.', 'Jdeme na to 📋', 'Další do seznamu…'],
+  clear: ['Všechno stíháme 😎', 'Čistý stůl!', 'Dneska hotovo ✓'],
+  added: ['Zapsáno 📝', 'Mám to v seznamu.'],
+  done: ['Odškrtnuto ✓', 'Jeden dole!', 'Hotovo, další!'],
+};
+
+
 export const DIALOGS = [
   ['Viděls ten nový framework?', 'Zase další? 🙄'],
   ['Kdo rozbil build?', 'Já ne!', 'Git blame říká, že ty 😅'],
@@ -56,6 +66,9 @@ export const ACTIVITY_CZ = {
   phone: 'volá (MCP)', thinking: 'přemýšlí', waiting: 'čeká na povolení', sleeping: 'dřímá', idle: 'volno',
   surfing: 'surfuje po internetu',
 };
+
+/** What the director is up to (entities/director.js beats), for the tooltip. */
+export const DIRECTOR_CZ = { stroll: 'prochází se po kanceláři', phone: 'telefonuje', cabinet: 'hrabe se v kartotéce', board: 'stojí u nástěnky s úkoly', idle: 'rozhlíží se' };
 
 export const IDLE_CZ = { coffee: 'pije kafe', sofa: 'kouká na televizi', chat: 'klábosí', browse: 'surfuje po internetu', nap: 'dřímá', sit: 'odpočívá', window: 'kouká z okna', stroll: 'prochází se po kanceláři' };
 

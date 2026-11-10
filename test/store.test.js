@@ -4,7 +4,7 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { Store, LEVELS, NAMES, pickName, employeeKey, freeMember } = require('../src/store');
+const { Store, LEVELS, NAMES, pickName, employeeKey, freeMember, accusative } = require('../src/store');
 
 const tmpStore = () => new Store(fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-test-')));
 
@@ -155,4 +155,63 @@ test('project folders for a new task: real repositories, most recent first, team
   store.data.days['2026-01-01'] = { '/p/eshop': { done: 1, tools: {}, workMs: 0, cost: 0 } };
   store.data.days['2099-01-01'] = { '/p/blog': { done: 1, tools: {}, workMs: 0, cost: 0 } };
   assert.deepEqual(store.projects().map((p) => [p.path, p.label]), [['/p/blog', 'blog'], ['/p/eshop', 'eshop']]);
+});
+
+test('a conversation keeps its owner: back to them when free, a colleague covers while they are busy', () => {
+  const store = tmpStore();
+  const owner = { key: '/p/x|2', slot: 2 };
+  // first time in the office: the first free member takes it and becomes its owner
+  assert.deepEqual(store.assignMember('/p/x', 's1', new Set(['/p/x'])), { ...owner, owner, substitute: false });
+  // back later (restart, 🏠 Domů): the owner again, although member 1 is free by now
+  assert.deepEqual(store.assignMember('/p/x', 's1', new Set()), { ...owner, owner, substitute: false });
+  // the owner works in another session: the first free colleague covers, the conversation stays theirs
+  assert.deepEqual(store.assignMember('/p/x', 's1', new Set(['/p/x|2'])), { key: '/p/x', slot: 1, owner, substitute: true });
+  assert.deepEqual(store.assignMember('/p/x', 's1', new Set(['/p/x|2', '/p/x'])), { key: '/p/x|3', slot: 3, owner, substitute: true });
+  assert.equal(store.ownerOf('s1').key, '/p/x|2');
+  assert.equal(store.ownerOf('nope'), null);
+  // not a conversation (another AI's process): just the free member, nothing remembered
+  assert.deepEqual(store.assignMember('ai:Codex', null, new Set()), { key: 'ai:Codex', slot: 1, owner: null, substitute: false });
+});
+
+test('an owner from another project is replaced; branches and rewinds inherit the owner', () => {
+  const store = tmpStore();
+  store.assignMember('/p/old', 's1', new Set(['/p/old']));
+  const moved = store.assignMember('/p/new', 's1', new Set());
+  assert.deepEqual([moved.key, moved.substitute], ['/p/new', false]);
+  assert.deepEqual([store.ownerOf('s1').key, store.ownerOf('s1').project], ['/p/new', '/p/new']);
+  store.assignMember('/p/a', 'orig', new Set(['/p/a']));
+  assert.equal(store.inheritOwner('orig', 'fork').key, '/p/a|2');
+  assert.deepEqual(store.assignMember('/p/a', 'fork', new Set()), { key: '/p/a|2', slot: 2, owner: { key: '/p/a|2', slot: 2 }, substitute: false });
+  assert.equal(store.inheritOwner('unknown', 'fork2'), null);
+  assert.equal(store.ownerOf('fork2'), null);
+});
+
+test('owners are saved (demo ones never), the least recently seen are dropped first, rekey moves them along', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'ai-office-test-'));
+  const store = new Store(dir);
+  store.setOwner('s1', { key: '/p/x|2', slot: 2, project: '/p/x' });
+  store.setOwner('demo-1', { key: 'demo:/p/fake', project: 'demo:/p/fake' });
+  store.flush();
+  const reloaded = new Store(dir);
+  assert.deepEqual((({ key, slot, project }) => ({ key, slot, project }))(reloaded.ownerOf('s1')), { key: '/p/x|2', slot: 2, project: '/p/x' });
+  assert.equal(reloaded.ownerOf('demo-1'), null);
+
+  store.data.owners = { a: { key: '/p/x', lastSeen: 3 }, b: { key: '/p/x', lastSeen: 1 }, c: { key: '/p/x', lastSeen: 2 } };
+  store.pruneOwners(2);
+  assert.deepEqual(Object.keys(store.data.owners).sort(), ['a', 'c']);
+
+  store.profile('/p/repo/sub|2', 'sub', { project: '/p/repo/sub', slot: 2 });
+  store.setOwner('s2', { key: '/p/repo/sub|2', slot: 2, project: '/p/repo/sub' });
+  store.rekey((p) => (p === '/p/repo/sub' ? '/p/repo' : null));
+  assert.deepEqual([store.ownerOf('s2').key, store.ownerOf('s2').project], ['/p/repo|2', '/p/repo']);
+});
+
+test('the covered-for owner is named, never created, and declined: zastupuje Vencu', () => {
+  const store = tmpStore();
+  assert.equal(store.nameTag('/p/nobody'), null);
+  assert.equal(store.data.profiles['/p/nobody'], undefined);
+  const p = store.profile('/p/x', 'x');
+  p.name = 'Venca';
+  assert.deepEqual(store.nameTag('/p/x'), { key: '/p/x', name: 'Venca', whom: 'Vencu' });
+  assert.deepEqual(['Mirek', 'Karel', 'Bohouš', 'Eva', 'Pepa 2', 'Petr'].map(accusative), ['Mirka', 'Karla', 'Bohouše', 'Evu', 'Pepu 2', 'Petra']);
 });

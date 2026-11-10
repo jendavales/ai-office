@@ -6,9 +6,13 @@ export { html, render, useEffect, useLayoutEffect, useMemo, useRef, useState } f
 import { marked } from '../../../node_modules/marked/lib/marked.esm.js';
 import DOMPurify from '../../../node_modules/dompurify/dist/purify.es.mjs';
 
-marked.setOptions({ gfm: true, breaks: true });
+// like Claude desktop: a single newline inside a paragraph is not a line break
+marked.setOptions({ gfm: true, breaks: false });
 
-/** Claude's markdown → sanitized HTML. */
+/** Claude's markdown → sanitized HTML. No images: the CSP blocks remote ones anyway, local paths would only break. */
 export function markdown(text) {
-  return DOMPurify.sanitize(marked.parse(String(text ?? '')), { FORBID_TAGS: ['style', 'form', 'input', 'button', 'iframe'] });
+  return DOMPurify.sanitize(marked.parse(String(text ?? '')), { FORBID_TAGS: ['style', 'form', 'input', 'button', 'iframe', 'img'] });
 }
+
+/** Message of a failed IPC call without Electron's "Error invoking remote method" wrapping. */
+export const ipcError = (err) => String(err?.message ?? err).replace(/^Error invoking remote method '[^']+': (Error: )?/, '');

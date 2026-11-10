@@ -23,6 +23,7 @@ export class Worker extends Person {
     this.key = profile?.key ?? ev.sessionId;
     this.name = ev.name ?? null;
     this.profile = profile;
+    this.coverFor = ev.coverFor ?? null; // { name, whom } of the conversation's owner, busy elsewhere, this one covers for
     this.inPlan = ev.mode === 'plan';
     this.boardSpot = null;
     this.context = null;     // % of the context window used

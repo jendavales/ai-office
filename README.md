@@ -23,14 +23,53 @@ npm start               # okno + ikona v menu baru
 
 Kancelář umí sessions i řídit, takže Claude desktop ani terminál nepotřebuješ:
 
-- **＋ Nový úkol** (⌘N): vybereš projekt (týmy, které kancelář zná, nebo „Jiná složka…“) a napíšeš, co se má udělat.
-  Úkol převezme volný člen týmu, přijde do kanceláře a vedle se vysune **panel s konverzací**.
-- **Klik na zaměstnance** session, kterou spustila kancelář, otevře jeho konverzaci (jmenovka v kanceláři se zvýrazní).
-  Odpověď se streamuje, nástroje jsou řádky se stavem (✓ / ✕), další zprávu můžeš napsat i během práce a přijde na řadu.
-  **■ Zastavit** přeruší rozdělanou práci, **🏠 Domů** ukončí session. V konverzaci jde kdykoli pokračovat.
-- **💬 Konverzace** (⌘K): všechny konverzace seskupené podle projektu, s hledáním. Esc zavře dialog nebo panel.
-- Po restartu aplikace se konverzace načtou z historie Claude Code (`~/.claude/projects`). Na první zprávu
-  zaměstnanec znovu přijde do práce.
+- **💬 Konverzace**: panel vedle kanceláře se seznamem **všech Claude konverzací** v počítači (`~/.claude/projects` –
+  z kanceláře, z Claude desktopu i z terminálu), seskupený podle projektu (skupiny jdou sbalit). Ikona u řádku: ⚙ pracuje ·
+  ● session běží · ○ z kanceláře · 🖥 Claude desktop · ⌨ terminál · 🤖 SDK. Tlačítko v liště panel ukáže nebo schová,
+  ⌘K skočí do **hledání** (názvy, projekty i text zpráv), **📥 Archiv** ukáže archivované. Názvy vznikají automaticky
+  jako v desktopu, **✎** konverzaci přejmenuje (prázdné = zpět na automatický název), **📥** ji archivuje.
+- **＋ Nový úkol** (⌘N): vybereš projekt (týmy, které kancelář zná, nebo „Jiná složka…“), model a effort a napíšeš,
+  co se má udělat. Úkol převezme volný člen týmu, přijde do kanceláře a v panelu se otevře jeho konverzace.
+- **Klik na konverzaci** v seznamu (nebo na zaměstnance session, kterou spustila kancelář) ji otevře. Odpověď se streamuje,
+  přemýšlení a nástroje jsou sbalené řádky (klik ukáže vstup a výstup), další zprávu můžeš napsat i během práce a přijde na řadu.
+  Dole přepneš **model a effort** (platí od další odpovědi), v hlavičce je vidět, s čím session běží (u konverzace, která
+  neběží, model její poslední odpovědi); klik na název ji přejmenuje.
+  Rozepsaná zpráva zůstane jako koncept i po zavření panelu nebo restartu. **■ Zastavit** přeruší rozdělanou práci,
+  **🏠 Domů** ukončí session, **‹** nebo Esc vrátí na seznam.
+- U tvé zprávy (po najetí myší nebo Tabem): **↶ Vrátit sem** vrátí konverzaci před tu zprávu – pozdější zprávy zmizí (přepis zůstane
+  v `~/.claude`) a text se vloží do pole pro novou zprávu; **⑂ Větvit odsud** udělá kopii až po odpověď na ni, originál zůstane.
+- **Odpověď do konverzace z Claude desktopu nebo terminálu** vytvoří její kopii v kanceláři (jako `--fork-session`)
+  se stejným názvem i vlastníkem; model a effort vybrané předem platí už pro ni. Původní zůstane, kde byla.
+- Po restartu aplikace se konverzace načtou z historie Claude Code. Na první zprávu zaměstnanec znovu přijde do práce.
+
+## Ředitel a úkoly z Todoistu
+
+V prosklené kanceláři vedoucího se prochází **ředitel** – to jsi ty. Hlídá tvoje úkoly z [Todoistu](https://todoist.com):
+
+- **Klik na ředitele** (nebo položka *Úkoly ředitele (Todoist)…* v menu ikony) otevře vedle kanceláře panel s úkoly.
+  Napoprvé chce **osobní API token**: v Todoistu *Nastavení → Integrace → Vývojář*, odkaz je přímo v panelu.
+  Token ověří, uloží zašifrovaný klíčenkou macOS (Electron `safeStorage`) do `~/Library/Application Support/ai-office/todoist.json`
+  a posílá ho jen na `api.todoist.com`. Ozubené kolečko v panelu token změní nebo zapomene.
+- **Filtry podle termínu**: *Dnes* (včetně úkolů po termínu), *7 dní*, *Vše*, *Bez termínu*, nebo libovolné datum
+  v políčku *do* (úkoly s termínem nejpozději ten den). Seznam je seskupený: po termínu, dnes, zítra, tento týden, později, bez termínu.
+- **Nový úkol** dole v panelu: text, termín (předvyplní se podle filtru), projekt a priorita, Enter přidá.
+  V textu fungují **zkratky jako v Todoistu** a hned pod políčkem je vidět, co znamenají (políčka
+  termín/projekt/priorita se podle nich přepnou): `!!1` … `!!4` nebo `p1` … `p4` priorita (1 = nejvyšší),
+  `#skola` projekt (bez ohledu na diakritiku a velikost písmen, stačí jednoznačný začátek názvu, jde i název
+  s mezerami), `@štítek` štítek, termín slovy – `dnes`, `zítra`, `pozítří`, `v pátek`, `příští úterý`,
+  `příští týden`, `za 3 dny`, `za týden`, `za měsíc`, `12. 11.`, `12. 11. 2027`, `2026-12-24` (česky i anglicky),
+  čas `14:00` nebo `v 14:00` (bez data na den z políčka termín, jinak dnes) a `// popis` – všechno za `//` je popis
+  úkolu. Zkratky se z textu úkolu odstraní; neznámý `#projekt` v textu zůstane a panel na něj upozorní. Opakované
+  termíny (`každý den`) zkratky zatím neumí.
+  **Termín** existujícího úkolu změníš klikem na jeho datum (📅), tamtéž jde i zrušit. Kolečko vlevo = hotovo,
+  klik na text otevře úkol v Todoistu. Zobrazí se i priorita (⚑ p1–p3), čas, opakování (↻) a případný Todoist *deadline* (⏰).
+- Seznam se obnovuje každou minutu. Ředitel nemá stůl ani počítač – na jeho místě stojí **nástěnka na kolečkách**
+  se sloupci *Hoří*, *Dnes* a *Pak* a za každý úkol na ní visí jeden lísteček: červený po termínu, žlutý na dnes,
+  zelený do týdne. Žádná čísla, kolik je práce, je vidět na první pohled. Nový úkol na nástěnku naskočí, hotový se
+  napřed přeškrtne a pak zmizí, prázdná nástěnka se usmívá. Klik na nástěnku otevře panel stejně jako klik na ředitele.
+- Ředitel se prochází po kanceláři a rozhlíží se, telefonuje, hrabe se v kartotéce, a když přibudou termíny,
+  jde s fixou k nástěnce. Podle termínů se tváří a občas něco prohodí.
+- Používá se Todoist API v1 (starší REST v2 a Sync v9 už Todoist vypnul). Termín = *due date* úkolu.
 
 Pod kapotou je to totéž co v Claude desktopu: pro každou session běží oficiální `claude -p --input-format stream-json
 --output-format stream-json` s přihlášením Claude Code CLI (tedy na předplatné). Kancelář posílá zprávy přes stdin
@@ -70,7 +109,9 @@ s časem resetu ve spodní liště. Data přichází jen u předplatného Pro/Ma
 - **Notifikace macOS** (když okno kanceláře není v popředí): žádost o povolení, hotový úkol delší než 20 s, chyba API,
   povýšení. Klik na notifikaci přepne do terminálu. Vypínají se v menu ikony.
 - **Zaměstnanci a kariéra**: každý projekt má stálý tým. Session převezme první volný člen týmu a každá další
-  souběžná session přivede dalšího – pořád tytéž lidi se stálým jménem a vzhledem. Každý má vlastní kariéru
+  souběžná session přivede dalšího – pořád tytéž lidi se stálým jménem a vzhledem. Každá konverzace má stálého
+  vlastníka: když se k ní vrátíš (i po restartu nebo „🏠 Domů“), dostane ji zase on; dělá-li zrovna jinde, zaskočí
+  za něj volný kolega (v kanceláři i v panelu konverzace je vidět „zastupuje …“). Větev, rewind i kopie cizí konverzace vlastníka dědí. Každý má vlastní kariéru
   (XP: +1 za nástroj, +10 za úkol; Junior → Medior → Senior → Lead → Ředitel) – s úrovní přibývají brýle, kravata,
   sluchátka a oblek. Projekt = git repozitář: jeho podsložky i worktrees (`.claude/worktrees/…`, `.worktrees/…`)
   patří k němu, chaty bez projektu mají jeden společný.
@@ -92,10 +133,10 @@ s časem resetu ve spodní liště. Data přichází jen u předplatného Pro/Ma
   commit nebo hotový dlouhý úkol → ♪ radost (ruce nahoru), povýšení → ⭐ hrdost, 3+ stážisti → 🌀 zahlcení.
   Je to vidět na výrazu obličeje, ikonce u hlavy, tempu psaní a v hláškách. Nálada řídí i pauzy
   (unavený jde na kafe, frustrovaný kouká z okna) a kdo spolu často klábosí, stanou se kamarády.
-- **Kancelář** pobočky vymyšlené firmy *Papírna Svišť*: prosklená kancelář vedoucího (sedí v ní zaměstnanec
-  s úrovní Lead a výš, jinak až když je plný open space) a zasedačka s tabulí (porady v plan módu, okno pro
-  frustrované), kuchyňka s automatem, recepce u vchodu, open space se dvěma řadami stolů a odpočívárna
-  s kopírkou, televizí a gaučem.
+- **Kancelář** pobočky vymyšlené firmy *Papírna Svišť*: prosklená kancelář vedoucího (prochází se v ní ředitel – ty –
+  s nástěnkou úkolů z Todoistu) a zasedačka s tabulí (porady v plan módu, okno pro frustrované), kuchyňka s automatem,
+  recepce u vchodu, open space se dvěma řadami stolů a odpočívárna s kopírkou, televizí a gaučem.
+  Když jsou stoly v open space plné, další zaměstnanci pracují s notebookem na gauči.
 - **Pohyb**: cesty hledá A* po mřížce (`renderer/src/world/path.js`) s náhodnými cenami polí a občasnou
   zajížďkou, takže nikdo nechodí pořád stejně. Každý má vlastní tempo chůze, klábosí se pokaždé jinde
   a znudění se jen tak procházejí po kanceláři. Kočka i vysavač obcházejí nábytek a stěny.
@@ -132,24 +173,27 @@ npm run test:smoke   # spustí appku s demem, vynutí stavy (noc, stávka, stati
 src/                    hlavní proces (CommonJS)
   main.js               okna, tray, HTTP server, sessions, notifikace
   hook-events.js        převod payloadů hooků na události kanceláře (čistá logika, testovaná)
-  store.js              zaměstnanci (týmy projektů, jména, kariéra), denní statistiky (office-data.json)
+  store.js              zaměstnanci (týmy projektů, jména, kariéra), vlastníci konverzací, denní statistiky (office-data.json)
   project.js            projekt podle git repozitáře (podsložky, worktrees, chaty bez projektu)
   history.js            jednorázový import historie z ~/.claude/projects (ceník, dedup, testovaný)
   agent.js              sessions spuštěné kanceláří: proces claude na session, stdin/stdout, přerušení, obnova
+  conversations.js      seznam všech Claude konverzací z ~/.claude/projects: index, názvy, model, hledání, archiv (testovaný)
   stream-events.js      stream-json / transcript → položky konverzace (čistá logika, testovaná)
+  todoist.js            úkoly ředitele: Todoist API v1, token přes safeStorage, polling, zápisy (testovaný)
   focus.js              přepnutí do terminálu podle TTY
 renderer/src/           renderer (ES moduly, bez buildu)
   main.js               vstupní bod – IPC, obnova stavu, smyčka
   state.js              sdílený stav (workers, limity, nastavení)
   core/                 canvas a kreslicí primitiva, utility, paleta
   world/layout.js       půdorys kanceláře, místa a trasy
-  entities/             zaměstnanci, stážisti, vzhled, nálady (mood.js), flákání a rozhovory
-  draw/                 postavy, monitory, nábytek, místnost, bubliny
+  entities/             zaměstnanci, stážisti, ředitel (director.js), vzhled, nálady (mood.js), flákání a rozhovory
+  draw/                 postavy, monitory, nábytek, místnost, nástěnka ředitele (taskboard.js), bubliny
+  todo/                 panel ředitele: model úkolů (filtry podle termínu, testovaný), stav, Preact UI
   life/                 kočka, vysavač, konfety, noční osvětlení
   ui/                   spodní lišta, tooltip a klikání, statistiky
   content/texts.js      všechny české texty (hlášky, dialogy, popisky)
   events.js             reakce na události z hlavního procesu
-  chat/                 panel s konverzací, dialogy Nový úkol a Konverzace (Preact + htm, marked, DOMPurify bez buildu)
+  chat/                 panel: seznam konverzací (list.js), konverzace (panel.js), dialogy Nový úkol a Vrátit sem (Preact + htm, marked, DOMPurify bez buildu)
 hooks/                  skripty volané Claude Code (hook + status line)
 scripts/fake-claude.js  náhrada claude pro testy (streamuje odpověď, umí přerušení, žádné tokeny)
 test/                   jednotkové testy

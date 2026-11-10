@@ -31,9 +31,8 @@ for (const deskY of [102, 140]) {
     DESKS.push({ cx, deskY, seatY: deskY + 28, seed: DESKS.length * 7919 + 13, owner: null });
   }
 }
-/** Manager's office: taken by a Lead/Director, otherwise only when the bullpen is full. */
-export const MANAGER_DESK = { cx: 26, deskY: 52, seatY: 80, seed: 4242, owner: null, office: true };
-DESKS.push(MANAGER_DESK);
+/** Manager's office: no desk – the director does not sit. A whiteboard on wheels with the to-do list (board face). */
+export const TASK_BOARD = { x: 7, y: 35, w: 38, h: 27 };
 
 export const SOFA = [0, 1, 2, 3].map((i) => ({ x: 253 + i * 14, y: 160, sofa: true, owner: null }));
 
@@ -66,8 +65,9 @@ export const OBSTACLES = [
   rect(ROOMS.conference.door[1], GLASS_Y, 151 - ROOMS.conference.door[1], 4),
   rect(63, FLOOR_Y, 4, GLASS_Y - FLOOR_Y),
   rect(148, FLOOR_Y, 4, GLASS_Y - FLOOR_Y),
-  // manager's office: filing cabinet
+  // manager's office: filing cabinet, task board on wheels (its stand)
   rect(50, FLOOR_Y, 12, 8),
+  rect(6, 51, 40, 21),
   // conference table
   rect(74, 58, 68, 17),
   // vending machine
@@ -87,7 +87,7 @@ export const GRID = createGrid({ width: 320, height: 180, minY: FLOOR_Y + 2, obs
 
 export const isWalkable = (x, y) => walkable(GRID, x, y);
 
-export const route = (from, to) => findPath(GRID, from, to);
+export const route = (from, to, opts) => findPath(GRID, from, to, opts);
 
 /** Open areas where people stroll and chat (corridor, by the reception, aisles, break room). */
 export const OPEN_AREAS = [
@@ -100,6 +100,24 @@ export const OPEN_AREAS = [
 
 export function randomFloorPoint(area = null) {
   return randomPoint(GRID, Math.random, area ?? OPEN_AREAS[Math.floor(Math.random() * OPEN_AREAS.length)]);
+}
+
+
+/**
+ * Manager's office: where the director strolls – in front of the task board and along its right side,
+ * but not the gap behind it against the back wall. Stops keep the feet at y 79 at most so the face stays
+ * above the blinds of the glass front.
+ */
+export const OFFICE_AREAS = [rect(10, 74, 48, 5), rect(50, 56, 8, 23)];
+
+/** The director's stops: the filing cabinet and the task board (facing it, marker in hand). */
+export const OFFICE_SPOTS = {
+  cabinet: { x: 55, y: 57 },
+  board: { x: 24, y: 77 },
+};
+
+export function randomOfficePoint() {
+  return randomPoint(GRID, Math.random, OFFICE_AREAS[Math.floor(Math.random() * OFFICE_AREAS.length)]);
 }
 
 
@@ -118,8 +136,7 @@ export function chatPair(busy = []) {
 
 
 export function claimSeat(worker) {
-  const senior = (worker.profile?.level ?? 0) >= 3;
-  const desk = (senior && !MANAGER_DESK.owner ? MANAGER_DESK : null) ?? DESKS.find((d) => !d.owner);
+  const desk = DESKS.find((d) => !d.owner);
   if (desk) {
     desk.owner = worker;
     return { x: desk.cx, y: desk.seatY, desk };
@@ -140,9 +157,8 @@ export function releaseSeat(worker) {
 }
 
 
-/** Where interns stand around their boss's seat (inside the glass office there is less room). */
+/** Where interns stand around their boss's seat. */
 export function internSpot(seat, slot) {
-  const offsets = seat.desk?.office ? [[-16, 0], [16, 0], [24, -6]] : [[-14, 1], [14, 1], [0, 10]];
-  const [dx, dy] = offsets[slot];
+  const [dx, dy] = [[-14, 1], [14, 1], [0, 10]][slot];
   return { x: seat.x + dx, y: seat.y + dy };
 }

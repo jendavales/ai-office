@@ -92,7 +92,7 @@ html, body {
 }
 
 /* ------------------------------------------------------------ shared controls (conversation UI) */
-#bar button, #chat button, #modal button, #modal select, #modal input, #modal textarea, #chat textarea {
+#bar button, #chat button, #modal button, #modal select, #modal input, #modal textarea, #chat textarea, #chat input, #chat select {
   font: inherit;
   color: #f4f4f4;
   background: #333c57;
@@ -103,7 +103,7 @@ html, body {
 #bar button:hover, #chat button:hover, #modal button:hover { border-color: #94a3b8; }
 button.primary { background: #41a6f6 !important; border-color: #73eff7 !important; color: #1a1c2c !important; }
 button:disabled { opacity: 0.45; cursor: default !important; }
-#chat textarea:focus, #modal textarea:focus, #modal input:focus, #modal select:focus { outline: none; border-color: #f4d35e; }
+#chat textarea:focus, #modal textarea:focus, #modal input:focus, #modal select:focus, #chat input:focus, #chat select:focus { outline: none; border-color: #f4d35e; }
 
 /* ------------------------------------------------------------ conversation panel */
 #chat {
@@ -131,6 +131,16 @@ button:disabled { opacity: 0.45; cursor: default !important; }
 #chat header .status.busy { color: #73eff7; }
 #chat header .buttons { display: flex; gap: 6px; }
 #chat .close, #modal .close { padding: 2px 8px; }
+#chat header .back { padding: 2px 8px; font-size: 14px; line-height: 16px; }
+#chat header .task.editable { cursor: text; }
+#chat header .task.editable:hover { color: #73eff7; }
+#chat input.rename { display: block; box-sizing: border-box; width: 100%; padding: 1px 6px; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; user-select: text; }
+#chat header input.rename { margin-top: 2px; }
+#chat header .status-row { display: flex; flex-wrap: wrap; gap: 3px 8px; align-items: center; margin-top: 3px; }
+#chat header .status-row .status { flex: 1 1 160px; min-width: 0; margin-top: 0; }
+#chat .badges { flex: none; display: flex; flex-wrap: wrap; gap: 4px; }
+#chat .badge { padding: 0 5px; font-size: 10px; line-height: 15px; color: #94a3b8; border: 1px solid #333c57; white-space: nowrap; }
+#chat .badge.src { color: #f4d35e; border-color: #8a7a3a; }
 
 #chat .items { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; user-select: text; }
 #chat .empty { color: #94a3b8; }
@@ -138,6 +148,14 @@ button:disabled { opacity: 0.45; cursor: default !important; }
 #chat .msg.user { margin-left: 24px; padding: 8px 10px; background: #262b44; border: 1px solid #333c57; }
 #chat .msg.user .who { color: #f4d35e; font-size: 11px; margin-bottom: 3px; }
 #chat .msg.user .body { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+#chat .msg.user .who { display: flex; gap: 8px; align-items: center; min-height: 17px; }
+#chat .msg.user .tag { color: #94a3b8; }
+#chat .msg.user .trunc { color: #566c86; font-style: italic; }
+/* only on hover – or once Tab reaches them (opacity, not visibility: hidden buttons couldn't take focus) */
+#chat .msg.user .acts { display: flex; gap: 4px; margin-left: auto; opacity: 0; }
+#chat .msg.user:hover .acts, #chat .msg.user .acts:focus-within { opacity: 1; }
+#chat .msg.user .acts button { padding: 0 6px; font-size: 10px; color: #94a3b8; background: #1a1c2c; border-color: #333c57; }
+#chat .msg.user .acts button:hover:not(:disabled) { color: #f4f4f4; border-color: #94a3b8; }
 
 #chat .md { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e6d9; word-break: break-word; }
 #chat .md > :first-child { margin-top: 0; }
@@ -177,6 +195,20 @@ button:disabled { opacity: 0.45; cursor: default !important; }
 #chat .tool.ok .st { color: #38b764; }
 #chat .tool.err { border-left-color: #ef7d57; }
 #chat .tool.err .st { color: #ef7d57; }
+#chat .tool .arr, #chat .thinking .arr { display: inline-block; width: 8px; color: #566c86; }
+#chat .tool.more { cursor: pointer; }
+#chat .tool.more:hover { background: #1d2038; }
+#chat .tool-detail { margin: -4px 0 4px; padding: 6px 8px 6px 24px; background: #0d0f1c; border-left: 2px solid #333c57; }
+#chat .tool-detail pre { margin: 0; max-height: 240px; overflow: auto; white-space: pre-wrap; word-break: break-word; font: 11px/1.45 Menlo, Monaco, monospace; color: #c7cfdd; }
+#chat .tool-detail pre + pre { margin-top: 6px; padding-top: 6px; border-top: 1px dashed #333c57; }
+#chat .tool-detail pre.out { color: #94a3b8; }
+#chat .tool-detail pre.out.err { color: #ef7d57; }
+#chat .tool-detail + .msg, #chat .tool-detail + .turn-end, #chat .tool-detail + .notice { margin-top: 10px; }
+#chat .thinking { margin: 0 0 8px; font-size: 11px; color: #94a3b8; }
+#chat .thinking .head { display: inline-block; cursor: pointer; }
+#chat .thinking .head:hover { color: #c7cfdd; }
+#chat .thinking .dots::after { content: '…'; animation: blink 1s steps(2) infinite; }
+#chat .thinking .text { margin-top: 4px; max-height: 320px; overflow-y: auto; padding: 6px 10px; border-left: 2px solid #333c57; white-space: pre-wrap; word-break: break-word; font: italic 12px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
 #chat .notice { margin: 0 0 12px; padding: 6px 10px; font-size: 11px; border: 1px solid #333c57; }
 #chat .notice.warn { color: #f4d35e; border-color: #8a7a3a; }
 #chat .notice.error { color: #ef7d57; border-color: #a05b53; }
@@ -199,10 +231,99 @@ button:disabled { opacity: 0.45; cursor: default !important; }
 }
 #chat .composer .actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
 #chat .composer .stop { color: #ef7d57; }
+#chat .composer .hint { margin-bottom: 6px; font-size: 11px; color: #f4d35e; }
+#chat .composer .grow { flex: 1; }
+#chat .opts { display: flex; gap: 4px; min-width: 0; }
+#chat .opts select { min-width: 0; max-width: 240px; padding: 2px 4px; font-size: 11px; }
+#chat .panel-error { display: flex; gap: 8px; align-items: center; margin: 0; border-width: 1px 0 0; background: #14162a; }
+#chat .panel-error span { flex: 1; min-width: 0; }
+#chat .panel-error .close { padding: 0 6px; }
+#chat .items .panel-error { margin: 0 0 10px; border-width: 1px; }
+
+/* the list of conversations (when no conversation is open) */
+#bar button.active, #chat .conv-tools button.active { background: #41a6f6; color: #1a1c2c; }
+#chat .conv-tools { display: flex; gap: 6px; padding: 8px 12px; background: #14162a; border-bottom: 1px solid #333c57; }
+#chat .conv-tools .search { flex: 1; min-width: 0; padding: 4px 8px; user-select: text; }
+#chat .conv-tools button { font-size: 11px; }
+#chat .conv-group { margin: 0 0 10px; }
+#chat .conv-group .g { display: flex; gap: 6px; align-items: baseline; padding: 0 0 4px; color: #f4d35e; cursor: pointer; }
+#chat .conv-group .g:hover { color: #ffe98a; }
+#chat .conv-group .g .n { color: #566c86; font-size: 11px; }
+#chat .conv-group .arr { width: 8px; color: #566c86; }
+#chat .conv { display: flex; gap: 8px; align-items: baseline; margin: 0 0 2px; padding: 5px 8px; background: #14162a; border-left: 2px solid #333c57; cursor: pointer; }
+#chat .conv:hover { background: #262b44; border-left-color: #73eff7; }
+#chat .conv.editing { cursor: default; }
+#chat .conv .st { flex: none; width: 16px; font-size: 11px; text-align: center; color: #566c86; cursor: help; }
+#chat .conv .st.busy { color: #73eff7; }
+#chat .conv .st.running { color: #38b764; }
+#chat .conv .main { flex: 1; min-width: 0; }
+#chat .conv .t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e6d9; }
+#chat .conv .snip { margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 11px; color: #94a3b8; }
+#chat .conv .when { flex: none; font-size: 11px; color: #566c86; white-space: nowrap; }
+#chat .conv .acts { display: none; flex: none; gap: 4px; }
+#chat .conv:hover .acts { display: flex; }
+#chat .conv:hover .when { display: none; }
+#chat .conv .acts button { padding: 0 5px; font-size: 11px; }
+#chat .conv-group .more { margin: 2px 0 0 26px; padding: 1px 8px; font-size: 11px; color: #94a3b8; background: none; border-color: #333c57; }
 
 @keyframes blink { 50% { opacity: 0; } }
 
-/* ------------------------------------------------------------ dialogs (new task, conversations) */
+/* ------------------------------------------------------------ the director's to-do list (Todoist) */
+#chat header .status.error { color: #ef7d57; }
+#chat input[type="date"] { padding: 1px 4px; font-size: 11px; color-scheme: dark; }
+#chat .todo-filters { display: flex; gap: 6px; align-items: center; padding: 8px 12px; background: #14162a; border-bottom: 1px solid #333c57; font-size: 11px; }
+#chat .todo-filters button.active { background: #41a6f6; color: #1a1c2c; }
+#chat .todo-filters .until { display: flex; gap: 4px; align-items: center; margin-left: auto; color: #94a3b8; }
+#chat .todo-group { margin: 10px 0 4px; font-size: 11px; color: #f4d35e; text-transform: uppercase; letter-spacing: 0.5px; }
+#chat .todo-group:first-child { margin-top: 0; }
+#chat .todo-group .n { color: #566c86; }
+#chat .todo-task { display: flex; gap: 8px; align-items: flex-start; margin: 0 0 3px; padding: 6px 8px; background: #14162a; border-left: 2px solid #333c57; }
+#chat .todo-task.overdue { border-left-color: #e43b44; }
+#chat .todo-task.today { border-left-color: #f4d35e; }
+#chat .todo-task.busy { opacity: 0.5; }
+#chat .todo-task .check { flex: none; width: 16px; height: 16px; margin-top: 1px; padding: 0; border-radius: 50%; font-size: 10px; line-height: 14px; }
+#chat .todo-task .check:hover:not(:disabled)::after { content: '✓'; color: #38b764; }
+#chat .todo-task .body { flex: 1; min-width: 0; }
+#chat .todo-task .content { font: 13px/1.4 -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e6d9; cursor: pointer; word-break: break-word; }
+#chat .todo-task .content:hover { color: #73eff7; }
+#chat .todo-task .meta { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 3px; font-size: 11px; color: #94a3b8; }
+#chat .todo-task .due { padding: 0 4px; font-size: 11px; color: #94a3b8; background: none; border-color: transparent; }
+#chat .todo-task .due:hover { border-color: #566c86; }
+#chat .todo-task .due.overdue { color: #e43b44; }
+#chat .todo-task .due.today { color: #f4d35e; }
+#chat .todo-task .due.tomorrow { color: #a7f070; }
+#chat .todo-task .due-edit { display: flex; gap: 4px; align-items: center; }
+#chat .todo-task .due-edit button { padding: 1px 6px; font-size: 11px; }
+#chat .todo-task .deadline { color: #ef7d57; }
+#chat .todo-add .text { display: block; box-sizing: border-box; width: 100%; padding: 8px 10px; background: #1a1c2c; font: 13px -apple-system, BlinkMacSystemFont, sans-serif; user-select: text; }
+#chat .todo-add .actions { flex-wrap: wrap; justify-content: flex-start; align-items: center; }
+#chat .todo-add label { display: flex; gap: 4px; align-items: center; font-size: 11px; color: #94a3b8; }
+/* one height for the row (date input, selects and button differ by default); the project keeps room for its name –
+   on a narrow panel the priority and Přidat wrap to a second line instead of squeezing it */
+#chat .todo-add .actions input, #chat .todo-add .actions select, #chat .todo-add .actions button { box-sizing: border-box; height: 24px; }
+#chat .todo-add select { flex: 1; min-width: 100px; padding: 3px 6px; }
+#chat .todo-add select.prio { flex: none; }
+#chat .todo-add .primary { margin-left: auto; }
+/* a field whose value came from a shortcut in the text (#projekt, !!1, zítra…) */
+#chat .todo-add .from-text, #chat .todo-add .from-text input { color: #f4d35e; }
+#chat .todo-add .from-text input:disabled, #chat .todo-add select.from-text:disabled { border-color: #8a7a3a; opacity: 1; }
+#chat .todo-add .preview { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; margin-top: 6px; font-size: 11px; color: #94a3b8; }
+#chat .todo-add .preview .what { min-width: 0; overflow-wrap: anywhere; color: #e8e6d9; font: 12px -apple-system, BlinkMacSystemFont, sans-serif; }
+#chat .todo-add .preview .what.missing { color: #ef7d57; font-style: italic; }
+#chat .todo-add .preview .chip { box-sizing: border-box; max-width: 100%; overflow: hidden; text-overflow: ellipsis; padding: 0 5px; border: 1px solid #333c57; border-radius: 3px; white-space: nowrap; }
+#chat .todo-add .preview .chip.warn { color: #f4d35e; border-color: #8a7a3a; }
+#chat .todo-setup { font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e6d9; }
+#chat .todo-setup h3 { margin: 0 0 8px; font-size: 14px; font-weight: normal; color: #f4d35e; }
+#chat .todo-setup p { margin: 0 0 8px; }
+#chat .todo-setup a { color: #73eff7; }
+#chat .todo-setup label { display: block; margin: 12px 0 4px; font: 12px Menlo, Monaco, monospace; color: #94a3b8; }
+#chat .todo-setup input { box-sizing: border-box; width: 100%; padding: 7px 9px; font: 12px Menlo, Monaco, monospace; user-select: text; }
+#chat .todo-setup .actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+#chat .todo-setup .danger { color: #ef7d57; }
+#chat .todo-setup .error { margin-top: 8px; color: #ef7d57; }
+#chat .todo-setup .hint { margin-top: 12px; font: 11px Menlo, Monaco, monospace; color: #566c86; }
+
+/* ------------------------------------------------------------ dialogs (new task, rewind) */
 #modal .backdrop {
   position: fixed;
   inset: 0;
@@ -235,13 +356,8 @@ button:disabled { opacity: 0.45; cursor: default !important; }
 #modal .error { margin-top: 8px; color: #ef7d57; }
 #modal .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
 #modal .hint { color: #566c86; font-size: 11px; }
-#modal .list { margin-top: 8px; overflow-y: auto; min-height: 60px; }
-#modal .group { margin: 10px 0 4px; color: #f4d35e; }
-#modal .group:first-child { margin-top: 0; }
-#modal .entry { display: flex; gap: 8px; padding: 5px 8px; cursor: pointer; border: 1px solid transparent; }
-#modal .entry.sel { background: #262b44; border-color: #566c86; }
-#modal .entry .st { width: 12px; color: #566c86; }
-#modal .entry .st.busy { color: #73eff7; }
-#modal .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-#modal .entry .when { color: #566c86; font-size: 11px; white-space: nowrap; }
-#modal .empty { color: #94a3b8; padding: 8px 0; }
+#modal textarea:disabled, #modal select:disabled { opacity: 0.6; }
+#modal .opts-row { margin-top: 8px; }
+#modal .opts { display: flex; flex: 1; gap: 6px; min-width: 0; }
+#modal .text { margin: 0 0 10px; font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e6d9; }
+#modal .quote { margin: 0; max-height: 160px; overflow: auto; padding: 6px 10px; border-left: 3px solid #566c86; background: #14162a; color: #94a3b8; white-space: pre-wrap; word-break: break-word; font: 12px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; user-select: text; }

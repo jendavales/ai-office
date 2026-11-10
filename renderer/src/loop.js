@@ -7,13 +7,15 @@ import {
   drawConferenceGlass, drawConferenceTable, drawCopier, drawDesk, drawManagerGlass, drawReception, drawSofa,
 } from './draw/furniture.js';
 import { drawEmptyOverlay, drawOverlay } from './draw/overlay.js';
-import { drawIntern, drawWorker } from './draw/people.js';
+import { drawDirector, drawIntern, drawWorker } from './draw/people.js';
 import { drawRoom } from './draw/room.js';
+import { drawTaskBoard } from './draw/taskboard.js';
 import { drawLifeOverlay, lifeItems, updateLife } from './life/index.js';
 import { drawLighting } from './life/lighting.js';
 import { drawParticles } from './life/particles.js';
+import { director, updateDirector } from './entities/director.js';
 import { convos, workers } from './state.js';
-import { DESKS, GLASS_Y } from './world/layout.js';
+import { DESKS, GLASS_Y, TASK_BOARD } from './world/layout.js';
 
 export function draw(t, dt) {
   const date = new Date();
@@ -41,6 +43,8 @@ export function draw(t, dt) {
   items.push({ y: 74.5, draw: () => drawReception(t) });
   const copying = [...workers.values()].some((w) => Math.hypot(w.x - 209, w.y - 120) < 12);
   items.push({ y: 116, draw: () => drawCopier(t, copying) });
+  items.push({ y: TASK_BOARD.y + TASK_BOARD.h + 10, draw: () => drawTaskBoard(director) }); // the director at the board stands in front
+  items.push({ y: director.y, draw: () => drawDirector(director, t) });
   for (const w of workers.values()) {
     // ghosts float above everything (they fly through walls and desks)
     if (!w.gone) items.push({ y: w.ghost ? 1000 + w.y : w.y, draw: () => drawWorker(w, t) });
@@ -67,6 +71,7 @@ export function frame() {
   last = ts;
   for (const convo of convos) convo.tick(ts);
   updateLife(dt);
+  updateDirector(dt);
   for (const [id, w] of workers) {
     w.update(dt);
     if (w.gone && w.interns.length === 0) workers.delete(id);

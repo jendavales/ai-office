@@ -1,11 +1,14 @@
 /** Hover tooltips, hit testing and click handling on the canvas. */
-import { ACTIVITY_CZ, IDLE_CZ } from '../content/texts.js';
+import { ACTIVITY_CZ, DIRECTOR_CZ, IDLE_CZ } from '../content/texts.js';
 import { COMPACT, canvas, toLogical } from '../core/canvas.js';
 import { isManaged, openChat } from '../chat/store.js';
 import { catHit, petCat } from '../life/cat.js';
 import { state, workers } from '../state.js';
 import { openStats } from './stats.js';
+import { director } from '../entities/director.js';
 import { EMOTIONS } from '../entities/mood.js';
+import { openTodos } from '../todo/store.js';
+import { TASK_BOARD } from '../world/layout.js';
 
 export const tooltip = document.getElementById('tooltip');
 
@@ -17,6 +20,9 @@ export function hitTest(lx, ly) {
     for (const i of w.interns) if (hit(i, 0.8)) return { intern: i };
     if (hit(w)) return { worker: w };
   }
+  if (hit(director)) return { director: true };
+  const b = TASK_BOARD;
+  if (lx >= b.x && lx <= b.x + b.w && ly >= b.y && ly <= b.y + b.h) return { taskBoard: true };
   if (catHit(lx, ly)) return { cat: true };
   if (lx >= 70 && lx <= 110 && ly >= 7 && ly <= 34) return { board: true };
   if (lx >= 4 && lx <= 24 && ly >= 6 && ly <= 32) return { portrait: true };
@@ -41,6 +47,7 @@ export function workerInfo(w) {
   const xp = p ? `${p.title} · ${p.xp} XP${p.nextXp ? ` (další úroveň ${p.nextXp})` : ''} · hotovo celkem ${p.done}` : '';
   return [
     w.name ? `${w.name} – ${w.project}  (${w.source})` : `${w.project}  (${w.source})`,
+    w.coverFor ? `zastupuje ${w.coverFor.whom ?? w.coverFor.name} (vlastník konverzace)` : '',
     xp,
     w.cwd,
     `stav: ${state}`,
@@ -53,6 +60,30 @@ export function workerInfo(w) {
 }
 
 
+/** The to-do counts, any Todoist error and what a click does – shared by the director and the task board. */
+function todoLines() {
+  const { configured, overdue, today, week, total, error } = director.todos;
+  return [
+    configured ? `${overdue} po termínu · ${today} na dnes · ${week} do týdne · ${total} celkem` : 'Todoist zatím není napojený',
+    error ? `⚠️ ${error}` : '',
+    '🖱 klik = úkoly a nastavení',
+  ];
+}
+
+function directorInfo() {
+  return [
+    'Ředitel – to jsi ty. Hlídá úkoly z Todoistu.',
+    `stav: ${DIRECTOR_CZ[director.beat?.kind ?? 'idle']}`,
+    ...todoLines(),
+  ].filter(Boolean).join('\n');
+}
+
+const taskBoardInfo = () => [
+  'Nástěnka ředitele – lísteček za každý úkol z Todoistu: červený po termínu, žlutý na dnes, zelený do týdne.',
+  ...todoLines(),
+].filter(Boolean).join('\n');
+
+
 canvas.addEventListener('mousemove', (e) => {
   const found = hitTest(...toLogical(e));
   canvas.style.cursor = found ? 'pointer' : 'default';
@@ -62,6 +93,8 @@ canvas.addEventListener('mousemove', (e) => {
   }
   let info;
   if (found.worker) info = workerInfo(found.worker);
+  else if (found.director) info = directorInfo();
+  else if (found.taskBoard) info = taskBoardInfo();
   else if (found.intern) info = `stážista (subagent)\n${found.intern.label}\nšéf: ${found.intern.boss.displayName}\n🖱 klik = přepnout do terminálu`;
   else if (found.cat) info = 'Bajt – kancelářská kočka\n🖱 klik = pohladit';
   else if (found.portrait) info = state.employeeOfWeek ? `Zaměstnanec týdne: ${state.employeeOfWeek.name} (${state.employeeOfWeek.label}, ${state.employeeOfWeek.title})\n${state.employeeOfWeek.done} hotových úkolů za 7 dní\n🖱 klik = statistiky` : 'Zaměstnanec týdne – zatím nikdo\n🖱 klik = statistiky';
@@ -87,6 +120,12 @@ canvas.addEventListener('click', async (e) => {
   }
   if (found.board || found.portrait) {
     openStats();
+    return;
+  }
+  if (found.director || found.taskBoard) {
+    // the popover has no panel – the main window opens with the list
+    if (COMPACT) window.office?.todoist?.open();
+    else openTodos();
     return;
   }
   const w = found.worker ?? found.intern.boss;
