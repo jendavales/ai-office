@@ -10,8 +10,14 @@ const os = require('node:os');
 const path = require('node:path');
 
 const shot = process.env.AI_OFFICE_SCREENSHOT || path.join(os.tmpdir(), 'ai-office-smoke.png');
+const root = path.join(__dirname, '..');
 const evalCode = `(() => {
   const o = window.__office;
+  // a conversation with the stand-in claude (scripts/fake-claude.js): new task, streamed reply, panel next to the office
+  setTimeout(async () => {
+    const id = await window.office.chat.create({ cwd: ${JSON.stringify(root)}, prompt: 'Zkontroluj README' });
+    await o.openChat(id);
+  }, 500);
   // runs 8 s after start (see main.js); delays below are relative to that
   setTimeout(() => {
     const free = [...o.workers.values()];
@@ -30,9 +36,10 @@ const evalCode = `(() => {
 
 const electron = require('electron'); // path to the binary when required from node
 const child = spawn(electron, ['.'], {
-  cwd: path.join(__dirname, '..'),
+  cwd: root,
   env: {
     ...process.env,
+    AI_OFFICE_CLAUDE_BIN: path.join(__dirname, 'fake-claude.js'),
     AI_OFFICE_PORT: process.env.AI_OFFICE_PORT || '4798',
     AI_OFFICE_SCREENSHOT: shot,
     AI_OFFICE_SCREENSHOT_DELAY: '17500',

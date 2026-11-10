@@ -29,7 +29,8 @@ export function resize() {
   OY = Math.round((canvas.height - H * S) / 2);
 }
 
-window.addEventListener('resize', resize);
+// the canvas also changes size without the window (conversation panel opening next to it)
+new ResizeObserver(resize).observe(canvas);
 
 resize();
 

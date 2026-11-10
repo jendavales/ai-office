@@ -143,3 +143,16 @@ test('profiles saved before totals existed start from their kept days', () => {
   const row = new Store(dir).stats().total[0];
   assert.deepEqual([row.workMs, row.cost, row.tools], [5000, 0.25, { reading: 1 }]);
 });
+
+test('project folders for a new task: real repositories, most recent first, team members counted once', () => {
+  const store = tmpStore();
+  store.profile('/p/eshop', 'eshop');
+  store.profile(employeeKey('/p/eshop', 2), 'eshop', { project: '/p/eshop', slot: 2 });
+  store.profile('/p/blog', 'blog');
+  store.profile('/Users/x/Library/Application Support/Claude/scratch-workspaces', 'scratch-workspaces');
+  store.profile('/private/tmp/run', 'run');
+  store.profile('ai:Codex', 'Codex');
+  store.data.days['2026-01-01'] = { '/p/eshop': { done: 1, tools: {}, workMs: 0, cost: 0 } };
+  store.data.days['2099-01-01'] = { '/p/blog': { done: 1, tools: {}, workMs: 0, cost: 0 } };
+  assert.deepEqual(store.projects().map((p) => [p.path, p.label]), [['/p/blog', 'blog'], ['/p/eshop', 'eshop']]);
+});

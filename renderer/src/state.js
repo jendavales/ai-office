@@ -8,6 +8,7 @@ export const state = {
   employeeOfWeek: null,  // from the stats module (portrait on the wall)
   projectOfWeek: null,   // from the stats module
   forceHour: null,       // test hook: preview day/night
+  chatOpen: null,        // session whose conversation panel is open (highlighted in the office)
 };
 
 // ---- idle behaviour selection & conversations

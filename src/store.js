@@ -281,6 +281,27 @@ class Store {
   }
 
   /** Aggregates for the stats panel (rows per employee): today, last 7 days, everyone ever, employee and project of the week. */
+  /**
+   * Project folders the office knows (git repositories of its teams), with the last day anyone worked there.
+   * Temporary folders and project-less desktop chats are left out – nobody starts a task there on purpose.
+   */
+  projects() {
+    const last = new Map();
+    for (const p of Object.values(this.data.profiles)) {
+      const dir = p.project;
+      if (!dir?.startsWith('/') || /\/scratch-workspaces$|^\/(?:private\/)?(?:tmp|var)\//.test(dir)) continue;
+      last.set(dir, Math.max(last.get(dir) ?? 0, p.since ?? 0));
+    }
+    for (const [day, perKey] of Object.entries(this.data.days)) {
+      const ts = new Date(`${day}T12:00:00`).getTime();
+      for (const key of Object.keys(perKey)) {
+        const dir = this.data.profiles[key]?.project;
+        if (last.has(dir)) last.set(dir, Math.max(last.get(dir), ts));
+      }
+    }
+    return [...last].map(([dir, ts]) => ({ path: dir, label: path.basename(dir), last: ts })).sort((a, b) => b.last - a.last);
+  }
+
   stats() {
     const today = dayKey();
     const weekStart = dayKey(new Date(Date.now() - 6 * 86_400_000));

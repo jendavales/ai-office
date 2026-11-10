@@ -50,5 +50,10 @@
         "NSAppleEventsUsageDescription": "AI Office přepíná do terminálu, ve kterém běží vybraný agent."
       }
     }
+  },
+  "dependencies": {
+    "dompurify": "^3.4.17",
+    "htm": "^3.1.1",
+    "marked": "^15.0.12"
   }
 }

@@ -1,6 +1,7 @@
 /** Hover tooltips, hit testing and click handling on the canvas. */
 import { ACTIVITY_CZ, IDLE_CZ } from '../content/texts.js';
-import { canvas, toLogical } from '../core/canvas.js';
+import { COMPACT, canvas, toLogical } from '../core/canvas.js';
+import { isManaged, openChat } from '../chat/store.js';
 import { catHit, petCat } from '../life/cat.js';
 import { state, workers } from '../state.js';
 import { openStats } from './stats.js';
@@ -47,7 +48,7 @@ export function workerInfo(w) {
     w.context != null ? `kontext: ${w.context} %${w.cost != null ? ` · výplata: $${w.cost.toFixed(2)}` : ''}` : '',
     w.lastText ? `poslední: ${w.lastText}` : '',
     interns ? `stážisti: ${interns}` : '',
-    window.office ? '🖱 klik = přepnout do terminálu' : '',
+    window.office ? (isManaged(w.id) ? '🖱 klik = otevřít konverzaci' : '🖱 klik = přepnout do terminálu') : '',
   ].filter(Boolean).join('\n');
 }
 
@@ -89,6 +90,10 @@ canvas.addEventListener('click', async (e) => {
     return;
   }
   const w = found.worker ?? found.intern.boss;
+  if (isManaged(w.id) && !COMPACT) {
+    openChat(w.id);
+    return;
+  }
   const app = await window.office?.focus(w.id);
   if (!app) w.say('Terminál nenalezen 🤷', 2.5, 'error');
 });

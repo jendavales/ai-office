@@ -8,11 +8,15 @@
 </head>
 <body>
   <div id="app">
-    <canvas id="scene"></canvas>
-    <footer id="bar"><span id="bar-left"></span><span id="bar-right"></span></footer>
+    <main id="stage">
+      <canvas id="scene"></canvas>
+      <footer id="bar"><span id="bar-left"></span><span id="bar-right"></span><span id="bar-actions"></span></footer>
+    </main>
+    <aside id="chat" hidden></aside>
   </div>
   <div id="tooltip" hidden></div>
   <div id="stats" hidden></div>
+  <div id="modal"></div>
   <script type="module" src="src/main.js"></script>
 </body>
 </html>

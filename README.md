@@ -19,6 +19,25 @@ npm start               # okno + ikona v menu baru
 - Ikona v menu baru: klik = mini kancelář, pravý klik = menu (vždy navrchu, spouštět po přihlášení, demo, konec)
 - Zavřením okna aplikace nekončí, běží dál v menu baru.
 
+## Úkoly přímo z kanceláře
+
+Kancelář umí sessions i řídit, takže Claude desktop ani terminál nepotřebuješ:
+
+- **＋ Nový úkol** (⌘N): vybereš projekt (týmy, které kancelář zná, nebo „Jiná složka…“) a napíšeš, co se má udělat.
+  Úkol převezme volný člen týmu, přijde do kanceláře a vedle se vysune **panel s konverzací**.
+- **Klik na zaměstnance** session, kterou spustila kancelář, otevře jeho konverzaci (jmenovka v kanceláři se zvýrazní).
+  Odpověď se streamuje, nástroje jsou řádky se stavem (✓ / ✕), další zprávu můžeš napsat i během práce a přijde na řadu.
+  **■ Zastavit** přeruší rozdělanou práci, **🏠 Domů** ukončí session. V konverzaci jde kdykoli pokračovat.
+- **💬 Konverzace** (⌘K): všechny konverzace seskupené podle projektu, s hledáním. Esc zavře dialog nebo panel.
+- Po restartu aplikace se konverzace načtou z historie Claude Code (`~/.claude/projects`). Na první zprávu
+  zaměstnanec znovu přijde do práce.
+
+Pod kapotou je to totéž co v Claude desktopu: pro každou session běží oficiální `claude -p --input-format stream-json
+--output-format stream-json` s přihlášením Claude Code CLI (tedy na předplatné). Kancelář posílá zprávy přes stdin
+a čte proud JSON zpráv. Prostředí se bere z login shellu, aby `claude`, `git` a spol. našly cestu i při spuštění z Finderu.
+Režim povolení se řídí tvým nastavením Claude Code. Dialog pro povolování zatím není, takže nástroj, který by se ptal,
+se zamítne a v konverzaci se objeví upozornění. Nejlépe to funguje s režimem `auto`.
+
 ## Jak to funguje
 
 ```
@@ -46,7 +65,7 @@ s časem resetu ve spodní liště. Data přichází jen u předplatného Pro/Ma
 
 **Interakce a život v kanceláři**
 
-- **Klik na zaměstnance** → přepne do jeho terminálu (Terminal.app a iTerm2 i na konkrétní záložku, ostatní aplikace
+- **Klik na zaměstnance** → u session spuštěné kanceláří otevře konverzaci, jinak přepne do jeho terminálu (Terminal.app a iTerm2 i na konkrétní záložku, ostatní aplikace
   jako Warp, PhpStorm a VS Code se jen aktivují). Hook kvůli tomu posílá TTY procesu Claude.
 - **Notifikace macOS** (když okno kanceláře není v popředí): žádost o povolení, hotový úkol delší než 20 s, chyba API,
   povýšení. Klik na notifikaci přepne do terminálu. Vypínají se v menu ikony.
@@ -98,6 +117,7 @@ Podle zátěže CPU se odhaduje, jestli pracují nebo mají volno. Konkrétní n
 - `AI_OFFICE_SCREENSHOT=/cesta.png npm start` – přehraje demo, uloží screenshot a skončí (pro vývoj)
 - `AI_OFFICE_DEMO=idle` – demo se čtyřmi nečinnými sessions (flákání, klábosení)
 - `AI_OFFICE_EVAL='…'` – JS spuštěný v rendereru 8 s po startu (při screenshotu); moduly jsou dostupné přes `window.__office`
+- `AI_OFFICE_CLAUDE_BIN=/cesta` – jiný `claude` pro konverzace (testy používají `scripts/fake-claude.js`)
 
 ## Vývoj
 
@@ -115,6 +135,8 @@ src/                    hlavní proces (CommonJS)
   store.js              zaměstnanci (týmy projektů, jména, kariéra), denní statistiky (office-data.json)
   project.js            projekt podle git repozitáře (podsložky, worktrees, chaty bez projektu)
   history.js            jednorázový import historie z ~/.claude/projects (ceník, dedup, testovaný)
+  agent.js              sessions spuštěné kanceláří: proces claude na session, stdin/stdout, přerušení, obnova
+  stream-events.js      stream-json / transcript → položky konverzace (čistá logika, testovaná)
   focus.js              přepnutí do terminálu podle TTY
 renderer/src/           renderer (ES moduly, bez buildu)
   main.js               vstupní bod – IPC, obnova stavu, smyčka
@@ -127,6 +149,8 @@ renderer/src/           renderer (ES moduly, bez buildu)
   ui/                   spodní lišta, tooltip a klikání, statistiky
   content/texts.js      všechny české texty (hlášky, dialogy, popisky)
   events.js             reakce na události z hlavního procesu
+  chat/                 panel s konverzací, dialogy Nový úkol a Konverzace (Preact + htm, marked, DOMPurify bez buildu)
 hooks/                  skripty volané Claude Code (hook + status line)
+scripts/fake-claude.js  náhrada claude pro testy (streamuje odpověď, umí přerušení, žádné tokeny)
 test/                   jednotkové testy
 ```

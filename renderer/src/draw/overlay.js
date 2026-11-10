@@ -4,7 +4,7 @@ import { C } from '../core/palette.js';
 import { clamp } from '../core/util.js';
 import { WORKING } from '../entities/activity.js';
 import { strikeActive } from '../limits.js';
-import { workers } from '../state.js';
+import { state, workers } from '../state.js';
 import { EMOTIONS, showEmote } from '../entities/mood.js';
 
 export const BUBBLE_STYLE = {
@@ -33,11 +33,12 @@ export function bubble(x, bottom, str, kind = 'info', size = 4) {
 }
 
 
-export function nameTag(x, y, label, color) {
+export function nameTag(x, y, label, color, selected = false) {
   const size = 3;
   const str = truncate(label, 22);
   const w = Math.ceil(measure(str, size)) + 5;
   const bx = clamp(Math.round(x - w / 2), 1, W - w - 1);
+  if (selected) R(bx - 0.5, y - 0.5, w + 1, 5.5, C.yellow); // whose conversation is open
   R(bx, y, w, 4.5, 'rgba(20,22,42,0.85)');
   R(bx + 1, y + 1.5, 1.5, 1.5, color);
   text(str, bx + 3 + (w - 3) / 2, y + 3.6, size, C.white);
@@ -54,11 +55,12 @@ export function drawOverlay(t) {
     const anchorY = atDesk ? w.seat.desk.deskY - 14 : w.y - 27;
 
     const onSofa = w.idle?.kind === 'sofa' || (w.seat.sofa && w.place === 'desk');
-    if (!w.walking && !onSofa) {
+    const selected = w.id === state.chatOpen;
+    if (selected || (!w.walking && !onSofa)) {
       const project = w.source !== 'Claude' && !w.project.includes('·') ? `${w.source} · ${w.project}` : w.project;
       const label = w.name ? `${w.name} · ${project}` : project;
       const convo = w.idle?.convo;
-      nameTag(w.x, w.y + (convo && convo.b === w ? 7.5 : 2.5), label, w.look.shirt);
+      nameTag(w.x, w.y + (convo && convo.b === w ? 7.5 : 2.5), label, w.look.shirt, selected);
     }
 
     // full context → sweating

@@ -7,7 +7,8 @@ html, body {
   font: 12px Menlo, Monaco, monospace;
   user-select: none;
 }
-#app { display: flex; flex-direction: column; height: 100%; }
+#app { display: flex; height: 100%; }
+#stage { flex: 1; min-width: 0; display: flex; flex-direction: column; }
 #scene { flex: 1; width: 100%; min-height: 0; display: block; }
 #bar {
   height: 28px;
@@ -24,6 +25,10 @@ html, body {
   overflow: hidden;
 }
 #bar b { color: #f4f4f4; font-weight: normal; }
+#bar-left { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#bar-right { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#bar-actions { flex: none; display: flex; gap: 6px; }
+#bar-actions:empty { display: none; }
 #bar .dot { display: inline-block; width: 8px; height: 8px; margin-right: 6px; background: #38b764; }
 #bar .dot.off { background: #566c86; }
 #bar .warn { color: #ef7d57; }
@@ -85,3 +90,158 @@ html, body {
   line-height: 1.45;
   white-space: pre-wrap;
 }
+
+/* ------------------------------------------------------------ shared controls (conversation UI) */
+#bar button, #chat button, #modal button, #modal select, #modal input, #modal textarea, #chat textarea {
+  font: inherit;
+  color: #f4f4f4;
+  background: #333c57;
+  border: 1px solid #566c86;
+}
+#bar button, #chat button, #modal button { padding: 3px 10px; cursor: pointer; }
+#bar button { padding: 1px 8px; font-size: 11px; }
+#bar button:hover, #chat button:hover, #modal button:hover { border-color: #94a3b8; }
+button.primary { background: #41a6f6 !important; border-color: #73eff7 !important; color: #1a1c2c !important; }
+button:disabled { opacity: 0.45; cursor: default !important; }
+#chat textarea:focus, #modal textarea:focus, #modal input:focus, #modal select:focus { outline: none; border-color: #f4d35e; }
+
+/* ------------------------------------------------------------ conversation panel */
+#chat {
+  flex: none;
+  width: clamp(380px, 40vw, 640px);
+  border-left: 2px solid #566c86;
+  background: #1a1c2c;
+  min-height: 0;
+}
+#chat[hidden] { display: none; }
+#chat .panel { display: flex; flex-direction: column; height: 100%; }
+#chat header {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 10px 12px;
+  background: #14162a;
+  border-bottom: 1px solid #333c57;
+}
+#chat header .title { flex: 1; min-width: 0; }
+#chat header .name { color: #94a3b8; }
+#chat header .name b { color: #f4d35e; font-weight: normal; }
+#chat header .task { margin-top: 3px; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#chat header .status { margin-top: 3px; color: #94a3b8; font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#chat header .status.busy { color: #73eff7; }
+#chat header .buttons { display: flex; gap: 6px; }
+#chat .close, #modal .close { padding: 2px 8px; }
+
+#chat .items { flex: 1; min-height: 0; overflow-y: auto; padding: 12px; user-select: text; }
+#chat .empty { color: #94a3b8; }
+#chat .msg { margin: 0 0 12px; }
+#chat .msg.user { margin-left: 24px; padding: 8px 10px; background: #262b44; border: 1px solid #333c57; }
+#chat .msg.user .who { color: #f4d35e; font-size: 11px; margin-bottom: 3px; }
+#chat .msg.user .body { white-space: pre-wrap; word-break: break-word; font: 13px/1.5 -apple-system, BlinkMacSystemFont, sans-serif; }
+
+#chat .md { font: 13px/1.55 -apple-system, BlinkMacSystemFont, sans-serif; color: #e8e6d9; word-break: break-word; }
+#chat .md > :first-child { margin-top: 0; }
+#chat .md > :last-child { margin-bottom: 0; }
+#chat .md p, #chat .md ul, #chat .md ol, #chat .md pre, #chat .md table, #chat .md blockquote { margin: 0 0 8px; }
+#chat .md ul, #chat .md ol { padding-left: 20px; }
+#chat .md h1, #chat .md h2, #chat .md h3, #chat .md h4 { margin: 12px 0 6px; font-size: 14px; color: #f4d35e; }
+#chat .md a { color: #73eff7; }
+#chat .md strong { color: #f4f4f4; }
+#chat .md code { font: 12px Menlo, Monaco, monospace; background: #262b44; padding: 1px 4px; }
+#chat .md pre { background: #0d0f1c; border: 1px solid #333c57; padding: 8px 10px; overflow-x: auto; }
+#chat .md pre code { background: none; padding: 0; }
+#chat .md table { border-collapse: collapse; display: block; overflow-x: auto; }
+#chat .md th, #chat .md td { border: 1px solid #333c57; padding: 4px 8px; text-align: left; }
+#chat .md th { color: #94a3b8; font-weight: normal; }
+#chat .md blockquote { border-left: 3px solid #566c86; padding-left: 10px; color: #94a3b8; }
+#chat .md.live::after { content: '▍'; color: #73eff7; animation: blink 1s steps(2) infinite; }
+
+#chat .tool {
+  display: flex;
+  gap: 6px;
+  align-items: baseline;
+  margin: 0 0 4px;
+  padding: 3px 8px;
+  font-size: 11px;
+  color: #94a3b8;
+  background: #14162a;
+  border-left: 2px solid #333c57;
+  white-space: nowrap;
+  overflow: hidden;
+}
+#chat .tool + .msg, #chat .tool + .turn-end, #chat .tool + .notice { margin-top: 10px; }
+#chat .tool .name { color: #c7cfdd; }
+#chat .tool .label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+#chat .tool.run { border-left-color: #73eff7; }
+#chat .tool.run .st { color: #73eff7; animation: blink 1s steps(2) infinite; }
+#chat .tool.ok .st { color: #38b764; }
+#chat .tool.err { border-left-color: #ef7d57; }
+#chat .tool.err .st { color: #ef7d57; }
+#chat .notice { margin: 0 0 12px; padding: 6px 10px; font-size: 11px; border: 1px solid #333c57; }
+#chat .notice.warn { color: #f4d35e; border-color: #8a7a3a; }
+#chat .notice.error { color: #ef7d57; border-color: #a05b53; }
+#chat .notice.info { color: #94a3b8; }
+#chat .turn-end { margin: -4px 0 14px; font-size: 11px; color: #566c86; }
+#chat .turn-end.error { color: #ef7d57; }
+#chat .working { color: #73eff7; font-size: 11px; }
+#chat .working .dots::after { content: '…'; animation: blink 1s steps(2) infinite; }
+
+#chat .composer { flex: none; padding: 10px 12px; border-top: 1px solid #333c57; background: #14162a; }
+#chat .composer textarea {
+  display: block;
+  box-sizing: border-box;
+  width: 100%;
+  resize: none;
+  padding: 8px 10px;
+  background: #1a1c2c;
+  font: 13px/1.45 -apple-system, BlinkMacSystemFont, sans-serif;
+  user-select: text;
+}
+#chat .composer .actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 8px; }
+#chat .composer .stop { color: #ef7d57; }
+
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ------------------------------------------------------------ dialogs (new task, conversations) */
+#modal .backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 12vh 16px 16px;
+  background: rgba(8, 10, 24, 0.7);
+}
+#modal .dialog {
+  box-sizing: border-box;
+  width: min(560px, 100%);
+  max-height: 76vh;
+  display: flex;
+  flex-direction: column;
+  padding: 14px 18px;
+  background: #1a1c2c;
+  border: 2px solid #566c86;
+  box-shadow: 6px 6px 0 #0d0f1c;
+}
+#modal .dialog.wide { width: min(680px, 100%); }
+#modal .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+#modal h2 { margin: 0; font-size: 16px; font-weight: normal; color: #f4d35e; }
+#modal label { display: block; margin: 10px 0 4px; color: #94a3b8; }
+#modal .row { display: flex; gap: 6px; }
+#modal select { flex: 1; min-width: 0; padding: 4px 6px; }
+#modal input, #modal textarea { box-sizing: border-box; width: 100%; padding: 7px 9px; user-select: text; }
+#modal textarea { resize: vertical; font: 13px/1.45 -apple-system, BlinkMacSystemFont, sans-serif; }
+#modal .error { margin-top: 8px; color: #ef7d57; }
+#modal .foot { display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-top: 12px; }
+#modal .hint { color: #566c86; font-size: 11px; }
+#modal .list { margin-top: 8px; overflow-y: auto; min-height: 60px; }
+#modal .group { margin: 10px 0 4px; color: #f4d35e; }
+#modal .group:first-child { margin-top: 0; }
+#modal .entry { display: flex; gap: 8px; padding: 5px 8px; cursor: pointer; border: 1px solid transparent; }
+#modal .entry.sel { background: #262b44; border-color: #566c86; }
+#modal .entry .st { width: 12px; color: #566c86; }
+#modal .entry .st.busy { color: #73eff7; }
+#modal .entry .t { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#modal .entry .when { color: #566c86; font-size: 11px; white-space: nowrap; }
+#modal .empty { color: #94a3b8; padding: 8px 0; }

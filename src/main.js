@@ -5,11 +5,12 @@
  *  - process scanner for other AI CLIs (Codex, Gemini, Aider, …)
  *  - session state, office window, menu-bar tray + popover
  */
-const { app, BrowserWindow, Tray, Menu, Notification, nativeImage, ipcMain, screen } = require('electron');
+const { app, BrowserWindow, Tray, Menu, Notification, dialog, nativeImage, ipcMain, screen, shell } = require('electron');
 const fs = require('node:fs');
 const http = require('node:http');
 const path = require('node:path');
 const { execFile } = require('node:child_process');
+const { Agents } = require('./agent');
 const { demoScript } = require('./demo');
 const { Store, freeMember } = require('./store');
 const { focusTty } = require('./focus');
@@ -35,6 +36,8 @@ const prefsFile = () => path.join(app.getPath('userData'), 'prefs.json');
 let prefs = { sound: true, notify: true };
 /** @type {Store} */
 let store = null;
+/** @type {Agents} sessions AI Office runs itself (conversation panel) */
+let agents = null;
 
 function loadPrefs() {
   try {
@@ -167,6 +170,12 @@ function notify(title, body, sessionId) {
 }
 
 async function focusSession(id) {
+  // a session AI Office runs itself → its conversation panel (also from the menu-bar popover and notifications)
+  if (agents?.has(id)) {
+    showMainWindow();
+    mainWin.webContents.send('chat:show', id);
+    return { name: 'AI Office' };
+  }
   const s = sessions.get(id);
   const tty = s?.tty ?? (id.startsWith('proc:') ? id.split(':')[2] : null);
   if (!tty) return null;
@@ -357,9 +366,52 @@ function runDemo() {
   }
 }
 
+// ---------------------------------------------------------------- conversations (sessions run by AI Office)
+
+const openExternal = (url) => (/^https?:\/\//i.test(String(url)) ? shell.openExternal(String(url)) : null);
+
+/** Project folders for a new task: the office's teams and folders of earlier conversations, most recent first. */
+function projectFolders() {
+  const seen = new Map();
+  for (const s of agents.list()) {
+    const root = projectRoot(s.cwd) || s.cwd;
+    if (!seen.has(root)) seen.set(root, { path: root, label: basename(root), last: s.lastActive });
+  }
+  for (const p of store.projects()) {
+    const known = seen.get(p.path);
+    if (known) known.last = Math.max(known.last, p.last);
+    else seen.set(p.path, p);
+  }
+  return [...seen.values()].filter((p) => fs.existsSync(p.path)).sort((a, b) => b.last - a.last);
+}
+
+function setupAgents() {
+  agents = new Agents({ dir: app.getPath('userData'), port: PORT });
+  agents.on('item', (p) => broadcast('chat:item', p));
+  agents.on('state', (s) => broadcast('chat:state', s));
+  agents.on('status', onStatus); // cost and subscription limits, as if from the status line
+  ipcMain.handle('chat:list', () => agents.list());
+  ipcMain.handle('chat:open', (_e, id) => agents.open(String(id)));
+  ipcMain.handle('chat:create', (_e, o) => agents.create({ cwd: o?.cwd, prompt: o?.prompt }));
+  ipcMain.handle('chat:send', (_e, id, text) => agents.send(String(id), text));
+  ipcMain.handle('chat:stop', (_e, id) => agents.stop(String(id)));
+  ipcMain.handle('chat:dismiss', (_e, id) => agents.dismiss(String(id)));
+  ipcMain.handle('chat:projects', () => projectFolders());
+  ipcMain.handle('chat:pickFolder', async () => {
+    const r = await dialog.showOpenDialog(mainWin, { title: 'Složka projektu', properties: ['openDirectory'] });
+    return r.canceled ? null : r.filePaths[0] ?? null;
+  });
+  app.on('before-quit', () => agents.shutdown());
+}
+
 // ---------------------------------------------------------------- windows
 
-const webPreferences = { preload: PRELOAD, autoplayPolicy: 'no-user-gesture-required' };
+const webPreferences = {
+  preload: PRELOAD,
+  autoplayPolicy: 'no-user-gesture-required',
+  // screenshot runs: keep painting while other windows cover the office, or the capture shows a stale frame
+  backgroundThrottling: !process.env.AI_OFFICE_SCREENSHOT,
+};
 
 function createMainWindow() {
   mainWin = new BrowserWindow({
@@ -367,6 +419,15 @@ function createMainWindow() {
     title: 'AI Office', backgroundColor: '#1a1c2c', show: false, webPreferences,
   });
   mainWin.loadFile(INDEX);
+  // links in conversations open in the browser, the office never navigates away
+  mainWin.webContents.setWindowOpenHandler(({ url }) => {
+    openExternal(url);
+    return { action: 'deny' };
+  });
+  mainWin.webContents.on('will-navigate', (e, url) => {
+    e.preventDefault();
+    openExternal(url);
+  });
   if (process.env.AI_OFFICE_SCREENSHOT) {
     // test runs: surface renderer errors on stdout (scripts/smoke.js fails on them)
     mainWin.webContents.on('console-message', (e, legacyLevel, legacyMessage) => {
@@ -505,6 +566,8 @@ if (!app.requestSingleInstanceLock()) {
     ipcMain.handle('office:info', () => ({ port: PORT, sound: prefs.sound, limits }));
     ipcMain.handle('office:focus', (_e, id) => focusSession(String(id)));
     ipcMain.handle('office:stats', () => store.stats());
+    ipcMain.handle('office:openExternal', (_e, url) => openExternal(url));
+    setupAgents();
     app.on('before-quit', () => store.flush());
     loadPrefs();
     importHistoryOnce(); // takes its cutoff now, before live events can create new profiles
